@@ -38,7 +38,8 @@ jobs:
           - arch: linux/amd64
             builder: buildjet-4vcpu-ubuntu-2204
     name: Build - ${{matrix.arch}}
-    runs-on: ${{matrix.builder}}
+    #runs-on: ${{matrix.builder}}
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
