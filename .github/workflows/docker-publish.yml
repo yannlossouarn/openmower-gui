@@ -34,9 +34,9 @@ jobs:
         arch: [ linux/arm64 , linux/amd64 ]
         include:
           - arch: linux/arm64
-            builder: buildjet-4vcpu-ubuntu-2204-arm
+            builder: ubuntu-latest
           - arch: linux/amd64
-            builder: buildjet-4vcpu-ubuntu-2204
+            builder: ubuntu-latest
     name: Build - ${{matrix.arch}}
     #runs-on: ${{matrix.builder}}
     runs-on: self-hosted
