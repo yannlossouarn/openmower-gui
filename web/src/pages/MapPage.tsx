@@ -223,7 +223,8 @@ export const MapPage = () => {
         }
     }, [editMap])
     useEffect(() => {
-        if (highLevelStatus.highLevelStatus.StateName == "AREA_RECORDING") {
+        console.log("highLevelStatus.highLevelStatus.StateName", highLevelStatus.highLevelStatus.StateName)
+        if (highLevelStatus.highLevelStatus.StateName == "AREA_RECORDING" || highLevelStatus.highLevelStatus.StateName == "IDLE") {
             joyStream.start("/api/openmower/publish/joy")
             setEditMap(false)
             return
