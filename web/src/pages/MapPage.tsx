@@ -892,14 +892,14 @@ export const MapPage = () => {
                 </Row>
             </Col>}
             {manualMode &&
-            <Col span={24} style={{height: 'available'}}>
-                    <div style={{position: "absolute", bottom: 100, right: 30, zIndex: 100}}>
+            <Col span={24} style={{height: '60%'}}>
+                    <div style={{position: "absolute", top: 30, right: 60, zIndex: 100}}>
                         <Joystick move={handleJoyMove} stop={handleJoyStop}/>
                     </div>
             </Col>
             }
             {!manualMode &&
-            <Col span={24} style={{height: '70%'}}>
+            <Col span={24} style={{height: '60%'}}>
                 {map_sw?.length && map_ne?.length ? <Map key={mapKey}
                                                          reuseMaps
                                                          antialias
@@ -941,10 +941,6 @@ export const MapPage = () => {
                         onDelete={onDelete}
                     />
                 </Map> : <Spinner/>}
-                {(highLevelStatus.highLevelStatus.StateName === "AREA_RECORDING" || highLevelStatus.highLevelStatus.StateName === "IDLE") &&
-                    <div style={{position: "absolute", bottom: 30, right: 30, zIndex: 100}}>
-                        <Joystick move={handleJoyMove} stop={handleJoyStop}/>
-                    </div>}
             </Col>
             }
         </Row>
