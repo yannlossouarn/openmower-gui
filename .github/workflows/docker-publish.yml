@@ -24,6 +24,8 @@ jobs:
         include:
           - arch: linux/arm64
             builder: buildjet-4vcpu-ubuntu-2204-arm
+          - arch: linux/amd64
+            builder: buildjet-4vcpu-ubuntu-2204
     name: Build - ${{matrix.arch}}
     runs-on: ${{matrix.builder}}
     permissions:
