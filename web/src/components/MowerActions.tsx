@@ -129,7 +129,7 @@ export const MowerActions: React.FC<React.PropsWithChildren> = (props) => {
     } else if (children) {
         children = <Col>{children}</Col>
     }
-    return <ActionsCard title={"Actions"} size={"small"}>
+    return <ActionsCard size={"small"}>
         <Row gutter={[8, 8]} justify={"start"}>
             {children}
             {children ? <Col><Divider type={"vertical"}/></Col> : null}
