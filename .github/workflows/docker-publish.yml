@@ -59,6 +59,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Add caching for dependencies or other data
+      - name: Cache Docker layers
+        uses: buildjet/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
