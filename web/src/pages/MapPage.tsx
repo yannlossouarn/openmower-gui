@@ -927,7 +927,7 @@ export const MapPage = () => {
                         onDelete={onDelete}
                     />
                 </Map> : <Spinner/>}
-                {(highLevelStatus.highLevelStatus.StateName === "AREA_RECORDING" || highLevelStatus.highLevelStatus.StateName === "AREA_RECORDING") &&
+                {(highLevelStatus.highLevelStatus.StateName === "AREA_RECORDING" || highLevelStatus.highLevelStatus.StateName === "IDLE") &&
                     <div style={{position: "absolute", bottom: 30, right: 30, zIndex: 100}}>
                         <Joystick move={handleJoyMove} stop={handleJoyStop}/>
                     </div>}
