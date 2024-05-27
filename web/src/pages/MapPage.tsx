@@ -843,13 +843,13 @@ export const MapPage = () => {
             />
             <Col span={24}>
                 <Typography.Title level={2}>Map</Typography.Title>
-                <Typography.Title level={5} style={{color: "#ff0000"}}>WARNING: Beta, please backup your map before
-                    use</Typography.Title>
             </Col>
             <Col span={24}>
                 <MowerActions>
                     {!editMap && <Button size={"small"} type="primary" onClick={handleEditMap}
                     >Edit Map</Button>}
+                    {editMap && <Typography.Title level={5} style={{color: "#ff0000"}}>WARNING: Beta, please backup your map before
+                    use</Typography.Title>}
                     {editMap && <AsyncButton size={"small"} type="primary" onAsyncClick={handleSaveMap}
                     >Save Map</AsyncButton>}
                     {editMap && <Button size={"small"} onClick={handleEditMap}
