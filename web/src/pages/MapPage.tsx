@@ -875,6 +875,7 @@ export const MapPage = () => {
                     >Restore Map</Button>
                 </MowerActions>
             </Col>
+            {editMap && 
             <Col span={24}>
                 <Row>
                     <Col span={12}>
@@ -884,7 +885,7 @@ export const MapPage = () => {
                         <Slider value={offsetY} onChange={handleOffsetY} min={-30} max={30} step={0.01}/>
                     </Col>
                 </Row>
-            </Col>
+            </Col>}
             <Col span={24} style={{height: '70%'}}>
                 {map_sw?.length && map_ne?.length ? <Map key={mapKey}
                                                          reuseMaps
