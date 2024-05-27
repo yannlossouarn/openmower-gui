@@ -20,12 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [ linux/arm64 , linux/amd64 ]
+        arch: [ linux/arm64 ]
         include:
           - arch: linux/arm64
             builder: buildjet-4vcpu-ubuntu-2204-arm
-          - arch: linux/amd64
-            builder: buildjet-4vcpu-ubuntu-2204
     name: Build - ${{matrix.arch}}
     runs-on: ${{matrix.builder}}
     permissions:
@@ -106,12 +104,6 @@ jobs:
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
-
-      - name: Set up QEMU (x64)
-        if: runner.arch != 'x64'
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: amd64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
