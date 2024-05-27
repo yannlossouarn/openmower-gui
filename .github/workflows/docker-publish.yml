@@ -31,13 +31,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [ linux/arm64]
+        arch: [ linux/arm64 , linux/amd64 ]
         include:
           - arch: linux/arm64
-            builder: ubuntu-latest
+            builder: buildjet-4vcpu-ubuntu-2204-arm
+          - arch: linux/amd64
+            builder: buildjet-4vcpu-ubuntu-2204
     name: Build - ${{matrix.arch}}
     #runs-on: ${{matrix.builder}}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
