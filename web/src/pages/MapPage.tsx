@@ -848,12 +848,20 @@ export const MapPage = () => {
                 <MowerActions>
                     {!editMap && <Button size={"small"} type="primary" onClick={handleEditMap}
                     >Edit Map</Button>}
-                    {editMap && <Typography.Title level={5} style={{color: "#ff0000"}}>WARNING: Beta, please backup your map before
-                    use</Typography.Title>}
-                    {editMap && <AsyncButton size={"small"} type="primary" onAsyncClick={handleSaveMap}
-                    >Save Map</AsyncButton>}
                     {editMap && <Button size={"small"} onClick={handleEditMap}
                     >Cancel Map Edition</Button>}
+                    {editMap && <Typography.Title level={5} style={{color: "#ff0000"}}>WARNING: Beta, please backup your map before
+                    use</Typography.Title>
+                    }
+                    {editMap && <Button size={"small"} onClick={handleBackupMap}
+                    >Backup Map</Button>
+                    }
+                    {editMap && <Button size={"small"} onClick={handleRestoreMap}
+                    >Restore Map</Button>
+                    }
+                    {editMap && <AsyncButton size={"small"} type="primary" onAsyncClick={handleSaveMap}
+                    >Save Map</AsyncButton>}
+
                     <AsyncDropDownButton size={"small"} menu={{
                         items: mowingAreas,
                         onAsyncClick: (e) => {
@@ -869,10 +877,7 @@ export const MapPage = () => {
                     {manualMode &&
                         <AsyncButton size={"small"} onAsyncClick={handleStopManualMode}
                         >Stop Manual Mowing</AsyncButton>}
-                    <Button size={"small"} onClick={handleBackupMap}
-                    >Backup Map</Button>
-                    <Button size={"small"} onClick={handleRestoreMap}
-                    >Restore Map</Button>
+
                 </MowerActions>
             </Col>
             {editMap && 
@@ -886,6 +891,14 @@ export const MapPage = () => {
                     </Col>
                 </Row>
             </Col>}
+            {manualMode &&
+            <Col span={24} style={{height: 'available'}}>
+                    <div style={{position: "absolute", bottom: 100, right: 30, zIndex: 100}}>
+                        <Joystick move={handleJoyMove} stop={handleJoyStop}/>
+                    </div>
+            </Col>
+            }
+            {!manualMode &&
             <Col span={24} style={{height: '70%'}}>
                 {map_sw?.length && map_ne?.length ? <Map key={mapKey}
                                                          reuseMaps
@@ -933,6 +946,7 @@ export const MapPage = () => {
                         <Joystick move={handleJoyMove} stop={handleJoyStop}/>
                     </div>}
             </Col>
+            }
         </Row>
     );
 }
