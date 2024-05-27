@@ -46,7 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
       <App style={{height: "100%"}}>
           <Row
-              style={{height: '25px', borderBottom: '1px solid #1677ff', position: "absolute", top: 0, right: 0, zIndex: 100, marginLeft: 50, paddingRight: 10, paddingTop: 2}}>
+              style={{height: '25px', borderBottom: '1px solid #1677ff', position: "absolute", top: 0, right: 0, zIndex: 0, marginLeft: 50, paddingRight: 10, paddingTop: 2}}>
               <MowerStatus/>
           </Row>
           <React.Suspense fallback={<Spinner/>}>
