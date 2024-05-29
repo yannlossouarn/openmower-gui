@@ -3,7 +3,7 @@ import { useGPS } from "../hooks/useGPS.ts";
 import { Col, Row, Statistic } from "antd";
 
 import { BatteryCharge, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
-import { MapPin, MapPinCheck, MapPinApproximation, MapPinOff, BroadcastTower, BroadcastTowerOff} from "./IconGeolocationComponent.tsx";
+import { MapPinCheck, MapPinApproximation, MapPinOff, BroadcastTower, BroadcastTowerOff} from "./IconGeolocationComponent.tsx";
 import { stateRenderer } from "./utils.tsx";
 import { AbsolutePoseFlags as Flags } from "../types/ros.ts";
 import { useEffect, useState } from "react";
@@ -50,12 +50,6 @@ export const MowerStatus = () => {
   const gps = useGPS();
 
   const flags = gps.Flags ?? 0;
-  let fixType = "\u2013";
-  if ((flags & Flags.FIXED) != 0) {
-    fixType = "FIX";
-  } else if ((flags & Flags.FLOAT) != 0) {
-    fixType = "FLOAT";
-  }
 
   const batteryCharging = highLevelStatus.IsCharging;
   const batteryLevel = highLevelStatus.BatteryPercent ?? 0;
