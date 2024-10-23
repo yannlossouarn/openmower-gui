@@ -2,17 +2,17 @@ import { useHighLevelStatus } from "../hooks/useHighLevelStatus.ts";
 import { useGPS } from "../hooks/useGPS.ts";
 import { Col, Row, Statistic } from "antd";
 
-import { BatteryCharge, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
+import { BatteryCharge, BatteryEmpty, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
 import { MapPinCheck, MapPinApproximation, MapPinOff, BroadcastTower, BroadcastTowerOff} from "./IconGeolocationComponent.tsx";
 import { stateRenderer } from "./utils.tsx";
 import { AbsolutePoseFlags as Flags } from "../types/ros.ts";
 import { useEffect, useState } from "react";
 
 const getBatteryIcon = (batteryLevel: number) => {
-  if (batteryLevel > 0.9) return <BatteryFull />;
+  if (batteryLevel > 0.99) return <BatteryFull />;
   if (batteryLevel > 0.66) return <BatteryHigh />;
   if (batteryLevel > 0.33) return <BatteryMid />;
-  if (batteryLevel < 0.33) return <BatteryLow />;
+  if (batteryLevel < 0.1) return <BatteryLow />;
   return <BatteryLow stroke={'grey'} fill={'grey'} />;
 };
 
@@ -39,9 +39,9 @@ const getNextBatteryIcon = (batteryLevel: number) => {
           return <><MapPinCheck {...{strokeWidth: '1', color: '#049F0B'}} /></>;
         } else if ((flags & Flags.FLOAT) != 0) {
           // fixType = "FLOAT";
-          return <><MapPinApproximation /></>;
+          return <><MapPinApproximation {...{strokeWidth: '1', color: '#E03300'}}/></>;
         } else {
-            return <><MapPinOff /></>;
+            return <><MapPinOff {...{strokeWidth: '1', color: '#E00000'}}/></>;
         }
     }
 

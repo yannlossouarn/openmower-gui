@@ -30,6 +30,7 @@ export const transpose = (offsetX: number, offsetY: number, datum: [number, numb
 };
 export const itranspose = (offsetX: number, offsetY: number, datum: [number, number, number], y: number, x: number): [number, number] => {
     //Inverse the transpose function
+    console.log(offsetX, offsetY);
     const coords: [number, number, number] = [0, 0, 0]
     converter.LLtoUTM(y, x, coords)
     return [coords[0] - datum[0] - offsetX, coords[1] - datum[1] - offsetY]

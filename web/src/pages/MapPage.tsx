@@ -294,7 +294,8 @@ export const MapPage = () => {
                     feat
                 }]
             }))
-            const dock_lonlat = transpose(offsetX, offsetY, datum, map?.DockY!!, map?.DockX!!)
+            const dock_lonlat = transpose(offsetX, offsetY, datum, map?.DockY!!, map?.DockX!!);
+            console.log("dock_lonlat", dock_lonlat);
             newFeatures["dock"] = {
                 id: "dock",
                 type: "Feature",
@@ -575,6 +576,10 @@ export const MapPage = () => {
         setEditMap(!editMap)
     }
 
+    function setDockToCurrentMowerPosition() {
+        setEditMap(!editMap)
+    }
+    
     async function handleSaveMap() {
         const areas: Record<string, Record<string, MowerMapMapArea>> = {}
         for (const f of Object.values<Feature>(features)) {
@@ -856,6 +861,9 @@ export const MapPage = () => {
                     {editMap && <Button size={"small"} onClick={handleBackupMap}
                     >Backup Map</Button>
                     }
+                    {editMap && <Button size={"small"} onClick={setDockToCurrentMowerPosition}
+                    >Set dock to current mower position</Button>
+                    }
                     {editMap && <Button size={"small"} onClick={handleRestoreMap}
                     >Restore Map</Button>
                     }
@@ -911,7 +919,7 @@ export const MapPage = () => {
                                                              bounds: [{lng: map_sw[0], lat: map_sw[1]}, {lng: map_ne[0], lat: map_ne[1]}],
                                                          }}
                                                          style={{width: '100%', height: '100%'}}
-                                                         mapStyle={"mapbox://styles/mapbox/satellite-streets-v12"}
+                                                         mapStyle={"mapbox://styles/mapbox/satellite-v9"}
                 >
                     {tileUri ? <Source type={"raster"} id={"custom-raster"} tiles={[tileUri]} tileSize={256}/> : null}
                     {tileUri ? <Layer type={"raster"} source={"custom-raster"} id={"custom-layer"}/> : null}
