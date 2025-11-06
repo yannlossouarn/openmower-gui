@@ -8,4 +8,8 @@ export const StyledTerminal = styled.div`
   div.react-terminal-wrapper > div.react-terminal-window-buttons {
     display: none;
   }
+
+  div.react-terminal {
+    height: auto;
+  }
 `;
