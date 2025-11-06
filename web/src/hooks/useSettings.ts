@@ -110,12 +110,20 @@ export const SettingsDesc: Record<string, Setting> = {
                 label: "PS3"
             },
             {
+                id: "shield",
+                label: "Shield"
+            },
+            {
                 id: "steam_stick",
                 label: "Steam Stick"
             },
             {
                 id: "steam_touch",
                 label: "Steam Touch"
+            },
+            {
+                id: "switch_pro",
+                label: "Switch Pro"
             }
         ]
     },
@@ -166,8 +174,22 @@ export const SettingsDesc: Record<string, Setting> = {
         settingType: SettingType.ConfigFile,
         section: "Positioning",
         type: SettingValueType.String,
-        defaultValue: "/dev/gps",
-        description: "GPS port"
+        defaultValue: "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00",
+        description: "GPS port (/dev/gps on mowgli)"
+    },
+    "OM_ANTENNA_OFFSET_X": {
+        settingType: SettingType.ConfigFile,
+        section: "Positioning",
+        type: SettingValueType.Float,
+        defaultValue: 0.3,
+        description: "Antenna offset X"
+    },
+    "OM_ANTENNA_OFFSET_Y": {
+        settingType: SettingType.ConfigFile,
+        section: "Positioning",
+        type: SettingValueType.Float,
+        defaultValue: 0.0,
+        description: "Antenna offset Y"
     },
     "OM_USE_F9R_SENSOR_FUSION": {
         settingType: SettingType.ConfigFile,
@@ -185,6 +207,11 @@ export const SettingsDesc: Record<string, Setting> = {
         section: "Docking",
         type: SettingValueType.Float, defaultValue: 2.0, description: "Distance to undock"
     },
+    "OM_DOCKING_EXTRA_TIME": {
+        settingType: SettingType.ConfigFile,
+        section: "Docking",
+        type: SettingValueType.Float, defaultValue: 0.0, description: "Extra time (s) to continue docking after detecting voltage"
+    },
     "OM_OUTLINE_COUNT": {
         settingType: SettingType.ConfigFile,
         section: "Navigation",
@@ -199,6 +226,16 @@ export const SettingsDesc: Record<string, Setting> = {
         settingType: SettingType.ConfigFile,
         section: "Mower",
         type: SettingValueType.Float, defaultValue: 0.1, description: "Mowing angle increment"
+    },
+    "OM_WHEEL_DISTANCE_M": {
+        settingType: SettingType.ConfigFile,
+        section: "Mower",
+        type: SettingValueType.Float, defaultValue: 0.325, description: "Distance between wheels in m"
+    },
+    "OM_WHEEL_TICKS_PER_M": {
+        settingType: SettingType.ConfigFile,
+        section: "Mower",
+        type: SettingValueType.Float, defaultValue: 1600, description: "Wheel ticks per meter"
     },
     "OM_MOWING_ANGLE_OFFSET_IS_ABSOLUTE": {
         settingType: SettingType.ConfigFile,
@@ -318,6 +355,11 @@ export const SettingsDesc: Record<string, Setting> = {
         settingType: SettingType.ConfigFile,
         section: "OpenMower MQTT",
         type: SettingValueType.String, defaultValue: "", description: "MQTT broker password"
+    },
+    "OM_MQTT_TOPIC_PREFIX=": {
+        settingType: SettingType.ConfigFile,
+        section: "OpenMower MQTT",
+        type: SettingValueType.String, defaultValue: "", description: "MQTT topic prefix"
     },
     "system.api.addr": {
         settingType: SettingType.Db,

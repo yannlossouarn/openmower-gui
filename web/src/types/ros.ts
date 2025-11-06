@@ -166,12 +166,14 @@ export type Status = {
     LeftEscStatus?: ESCStatus
     RightEscStatus?: ESCStatus
     MowEscStatus?: ESCStatus
+    MowEnabled?: boolean
 }
 
 export type ESCStatus = {
     Status?: string
     Current?: number
     Tacho?: number
+    Rpm?: number
     TemperatureMotor?: number
     TemperaturePcb?: number
 }
@@ -246,6 +248,9 @@ export type HighLevelStatus = {
     BatteryPercent?: number
     IsCharging?: boolean
     Emergency?: boolean
+    CurrentArea?: number
+    CurrentPath?: number
+    CurrentPathIndex?: number
 }
 
 export const enum AbsolutePoseFlags {
