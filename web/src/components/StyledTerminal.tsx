@@ -8,6 +8,7 @@ export const StyledTerminal = styled.div`
     padding-right: 8px !important;
     background-color: #1a1e24 !important;
     font-size: 13px;
+    height: 100%;
   }
 
   div.react-terminal-wrapper > div.react-terminal-window-buttons {

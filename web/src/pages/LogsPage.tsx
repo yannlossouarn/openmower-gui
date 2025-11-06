@@ -165,8 +165,8 @@ export const LogsPage = () => {
     };
 
     return (
-        <Row>
-            <Col span={24}>
+        <Row style={{ height: "100%" , display: "flex", gap: 0, alignItems: "center", flexWrap: "wrap" }}>
+            <Col span={24} style={{ display: "flex", gap: 0, alignItems: "center", flexWrap: "wrap" }}>
                 <Typography.Title level={2}>Container logs</Typography.Title>
             </Col>
 
@@ -214,7 +214,7 @@ export const LogsPage = () => {
                 </Space>
             </Col>
 
-            <Col span={24}>
+            <Col span={24} >
                 {/* Scrollable wrapper that we control */}
                 <div
                     ref={containerRef}
