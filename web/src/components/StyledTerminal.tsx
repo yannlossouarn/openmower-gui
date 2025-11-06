@@ -3,7 +3,10 @@ import styled from "styled-components";
 export const StyledTerminal = styled.div`
   div.react-terminal-wrapper {
     padding-top: 35px;
-    background-color: #000 !important;
+    padding-bottom: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: #1a1e24 !important;
     font-size: 13px;
   }
 
