@@ -8,13 +8,13 @@ FROM node:22-alpine AS build-web
 WORKDIR /web
 COPY web/package.json web/yarn.lock ./
 RUN --mount=type=cache,target=/root/.cache/yarn \
-    yarn install --frozen-lockfile
+    yarn install --frozen-lockfile --production=false
 COPY web/ .
 RUN set -euxo pipefail; \
     node -v; yarn -v; \
     node -p "require('./package.json').scripts" || true; \
     test -f yarn.lock || (echo 'yarn.lock missing' && exit 1)
-RUN yarn build
+RUN yarn build --verbose
 
 FROM ubuntu:22.04 AS deps
 RUN apt-get update && apt-get install -y ca-certificates curl python3 python3-pip python3-venv libjim-dev\
