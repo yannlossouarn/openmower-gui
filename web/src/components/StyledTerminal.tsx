@@ -11,11 +11,11 @@ export const StyledTerminal = styled.div`
   }
 
   div.react-terminal {
-    height: auto;
+    height: auto !important;
   }
 
   div.react-terminal-light .react-terminal-line::before {
-    display: initial;
-    content: initial;
+    display: initial !important;
+    content: initial !important;
   }
 `;
