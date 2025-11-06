@@ -14,7 +14,7 @@ RUN set -euxo pipefail; \
     node -v; yarn -v; \
     node -p "require('./package.json').scripts" || true; \
     test -f yarn.lock || (echo 'yarn.lock missing' && exit 1)
-RUN yarn build --verbose
+RUN yarn build
 
 FROM ubuntu:22.04 AS deps
 RUN apt-get update && apt-get install -y ca-certificates curl python3 python3-pip python3-venv libjim-dev\
