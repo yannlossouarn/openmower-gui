@@ -908,7 +908,7 @@ export const MapPage = () => {
         })
         input.click();
     };
-
+/*
     const handleDownloadGeoJSON = () => {
         const geojson = {
             type: "FeatureCollection",
@@ -1009,7 +1009,7 @@ export const MapPage = () => {
         });
         input.click();
     };
-
+*/
     const handleManualMode = async () => {
         await mowerAction(
             "high_level_control",

@@ -2,7 +2,8 @@ import {Col, Row, Statistic} from "antd";
 import {useGPS} from "../hooks/useGPS.ts";
 import { booleanFormatter, booleanFormatterInverted } from "./utils.tsx";
 import { AbsolutePoseFlags as Flags } from "../types/ros.ts";
-import {converter, drawLine, getQuaternionFromHeading, itranspose, transpose} from "../utils/map.tsx";
+// import {converter, drawLine, getQuaternionFromHeading, itranspose, transpose} from "../utils/map.tsx";
+import {transpose} from "../utils/map.tsx";
 
 export function GpsComponent() {
     const gps = useGPS();

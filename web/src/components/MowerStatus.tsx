@@ -2,7 +2,8 @@ import { useHighLevelStatus } from "../hooks/useHighLevelStatus.ts";
 import { useGPS } from "../hooks/useGPS.ts";
 import { Col, Row, Statistic } from "antd";
 
-import { BatteryCharge, BatteryEmpty, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
+// import { BatteryCharge, BatteryEmpty, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
+import { BatteryCharge, BatteryLow, BatteryMid, BatteryHigh, BatteryFull} from "./IconBatteryComponent.tsx";
 import { MapPinCheck, MapPinApproximation, MapPinOff, BroadcastTower, BroadcastTowerOff} from "./IconGeolocationComponent.tsx";
 import { stateRenderer } from "./utils.tsx";
 import { AbsolutePoseFlags as Flags } from "../types/ros.ts";
