@@ -211,9 +211,6 @@ export const LogsPage = () => {
                     >
                         {autoFollow ? "Following ✓" : "Follow latest"}
                     </Button>
-                    {!autoFollow && (
-                        <Button onClick={() => jumpToLatest(true)}>Jump to latest</Button>
-                    )}
                 </Space>
             </Col>
 
