@@ -1194,7 +1194,7 @@ export const MapPage = () => {
                                 area: item!!.feat?.properties?.index,
                             })()
                         }
-                    }}>Mow area</AsyncDropDownButton>}
+                    }}>Mow area</AsyncDropDownButton>
                     {!manualMode &&
                         <AsyncButton size={"small"}  key="btnManualMode"  onAsyncClick={handleManualMode}
                         >Manual mowing</AsyncButton>}
