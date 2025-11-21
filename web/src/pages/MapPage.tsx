@@ -75,6 +75,7 @@ export const MapPage = () => {
     const [map, setMap] = useState<MapType | undefined>(undefined)
     const [path, setPath] = useState<MarkerArray | undefined>(undefined)
     const [plan, setPlan] = useState<Path | undefined>(undefined)
+    const [mowingPaths, setMowingPaths] = useState<Path[] | undefined>(undefined)
     const mowingToolWidth = parseFloat(settings["OM_TOOL_WIDTH"] ?? "0.13") * 100;
     const [mowingAreas, setMowingAreas] = useState<{ key: string, label: string, feat: Feature }[]>([])
     const poseStream = useWS<string>(() => {
@@ -152,19 +153,8 @@ export const MapPage = () => {
             })
         },
         (e) => {
-            const mowingPaths = JSON.parse(e) as Path[];
-            setFeatures(oldFeatures => {
-                const newFeatures = {...oldFeatures};
-                mowingPaths.forEach((mowingPath, index) => {
-                    if (mowingPath?.Poses) {
-                        const line = mowingPath.Poses.map((pose) => {
-                            return transpose(offsetX, offsetY, datum, pose.Pose?.Position?.Y!, pose.Pose?.Position?.X!)
-                        });
-                        newFeatures["mowingPath-" + index.toString()] = new PathFeature("mowingPath-" + index.toString(), line, `rgba(107, 255, 188, 0.68)`, mowingToolWidth);
-                    }
-                })
-                return newFeatures
-            })
+            const incoming = JSON.parse(e) as Path[];
+            setMowingPaths(incoming);
         });
 
     const joyStream = useWS<string>(() => {
@@ -301,12 +291,23 @@ export const MapPage = () => {
             const feature = new ActivePathFeature("plan", coordinates);
             newFeatures[feature.id] = feature
         }
+        // include mowingPaths so they are preserved when features are rebuilt
+        if (mowingPaths && mowingPaths.length) {
+            mowingPaths.forEach((mowingPath, index) => {
+                if (mowingPath?.Poses) {
+                    const line = mowingPath.Poses.map((pose) => {
+                        return transpose(offsetX, offsetY, datum, pose.Pose?.Position?.Y!, pose.Pose?.Position?.X!)
+                    });
+                    newFeatures["mowingPath-" + index.toString()] = new PathFeature("mowingPath-" + index.toString(), line, `rgba(107, 255, 188, 0.68)`, mowingToolWidth);
+                }
+            })
+        }
         if (console.debug) {
             console.debug("Set new features");
             console.debug(newFeatures);
         }
         setFeatures(newFeatures)
-    }, [map, path, plan, offsetX, offsetY]);
+    }, [map, path, plan, offsetX, offsetY, mowingPaths]);
 
     useEffect(() => {
         const labels = buildLabels(Object.values(features))
@@ -1165,6 +1166,7 @@ export const MapPage = () => {
             
             <Col span={24}>
                 <MowerActions>
+                    {highLevelStatus.highLevelStatus.StateName == "IDLE" ? <AsyncButton size={"small"} key="btnHomeIdle" onAsyncClick={mowerAction("high_level_control", {Command: 2})}>Home</AsyncButton> : null}
                     {!editMap && <Button size={"small"} key="btnEdit" type="primary" onClick={handleEditMap}
                     >Edit Map</Button>}
                     {editMap && <AsyncButton size={"small"} type="primary" onAsyncClick={handleSaveMap}
