@@ -142,7 +142,7 @@ const SchemaField = createSchemaField({
     },
 })
 export const SettingsComponent: React.FC<{
-    actions?: (form: FormType<SettingsConfig>, save: (values: SettingsConfig) => Promise<void>, restartOM: () => Promise<void>, restartGUI: () => Promise<void>) => React.ReactElement[],
+    actions?: (form: FormType<SettingsConfig>, save: (values: SettingsConfig) => Promise<void>, restartOM: () => Promise<void>, restartCore: () => Promise<void>, restartSerial: () => Promise<void>, restartGUI: () => Promise<void>) => React.ReactElement[],
     contentStyle?: CSSProperties
 }> = (props) => {
     const form = useMemo(
@@ -249,6 +249,58 @@ export const SettingsComponent: React.FC<{
         }
     }
 
+    const restartROSCore = async () => {
+        try {
+            const resContainersList = await guiApi.containers.containersList()
+            if (resContainersList.error) {
+                throw new Error(resContainersList.error.error)
+            }
+            const openMowerContainer = resContainersList.data.containers?.find((container) => container.labels?.app == "roscore" || container.names?.includes("/roscore"))
+            if (openMowerContainer?.id) {
+                const res = await guiApi.containers.containersCreate(openMowerContainer.id, "restart")
+                if (res.error) {
+                    throw new Error(res.error.error)
+                }
+                notification.success({
+                    message: "ROS core restarted",
+                })
+            } else {
+                throw new Error("ROS core container not found")
+            }
+        } catch (e: any) {
+            notification.error({
+                message: "Failed to restart ROS core",
+                description: e.message,
+            })
+        }
+    }
+
+        const restartROSSerial = async () => {
+        try {
+            const resContainersList = await guiApi.containers.containersList()
+            if (resContainersList.error) {
+                throw new Error(resContainersList.error.error)
+            }
+            const openMowerContainer = resContainersList.data.containers?.find((container) => container.labels?.app == "rosserial" || container.names?.includes("/rosserial"))
+            if (openMowerContainer?.id) {
+                const res = await guiApi.containers.containersCreate(openMowerContainer.id, "restart")
+                if (res.error) {
+                    throw new Error(res.error.error)
+                }
+                notification.success({
+                    message: "ROS Serial restarted",
+                })
+            } else {
+                throw new Error("ROS Serial container not found")
+            }
+        } catch (e: any) {
+            notification.error({
+                message: "Failed to restart ROS Serial",
+                description: e.message,
+            })
+        }
+    }
+
     const sections = Object.keys(SettingsDesc).reduce((acc, key) => {
         const setting = SettingsDesc[key];
         if (!acc[setting.section]) {
@@ -347,7 +399,7 @@ export const SettingsComponent: React.FC<{
             </Col>
             <Col span={24} style={{position: "fixed", bottom: 20}}>
                 <FormButtonGroup.FormItem>
-                    {props.actions && props.actions(form, setSettings, restartOpenMower, restartGui)}
+                    {props.actions && props.actions(form, setSettings, restartOpenMower, restartROSCore, restartROSSerial, restartGui)}
                 </FormButtonGroup.FormItem>
             </Col>
         </Form>

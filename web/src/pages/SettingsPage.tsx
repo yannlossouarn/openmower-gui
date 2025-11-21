@@ -9,10 +9,12 @@ export const SettingsPage = () => {
                 <Typography.Title level={2}>Settings</Typography.Title>
             </Col>
             <Col span={24}>
-                <SettingsComponent actions={(form, save, restartOM, restartGUI) => {
+                <SettingsComponent actions={(form, save, restartOM, restartCore, restartSerial, restartGUI) => {
                     return [
                         <Submit loading={form.loading} onSubmit={save}>Save settings</Submit>,
                         <AsyncButton onAsyncClick={restartOM}>Restart OpenMower</AsyncButton>,
+                        <AsyncButton onAsyncClick={restartCore}>Restart ROS Core</AsyncButton>,
+                        <AsyncButton onAsyncClick={restartSerial}>Restart ROS Serial</AsyncButton>,
                         <AsyncButton onAsyncClick={restartGUI}>Restart GUI</AsyncButton>
                     ]
                 }}/>
