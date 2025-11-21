@@ -505,9 +505,11 @@ export const useSettings = () => {
     useEffect(() => {
         (async () => {
             try {
+                console.log("avant useEffect setLoading(true)");
                 setLoading(true)
                 const settingsList = await guiApi.settings.settingsList()
                 if (settingsList.error) {
+                    console.log("settingsList.error");
                     throw new Error(settingsList.error.error)
                 }
                 setLoading(false)
@@ -539,6 +541,7 @@ export const useSettings = () => {
     const handleSetConfig = async (newConfig: SettingsConfig) => {
         try {
             newConfig = flattenConfig(newConfig)
+            console.log("avant handleSetConfig:setLoading(true)");
             setLoading(true)
             const configFiltered = Object.keys(newConfig).reduce((acc, key) => {
                 if (SettingsDesc[key]?.settingType === SettingType.ConfigFile) {
@@ -564,12 +567,14 @@ export const useSettings = () => {
             notification.success({
                 message: "Settings saved",
             })
+            console.log("avant handleSetConfig:setLoading(false) dans try");
             setLoading(false)
         } catch (e: any) {
             notification.error({
                 message: "Failed to save settings",
                 description: e.message,
             })
+            console.log("avant handleSetConfig:setLoading(false) dans catch");
             setLoading(false)
         }
     };
