@@ -80,10 +80,12 @@ func (r *RosSubscriber) processMessage(messageToProcess []byte) {
 // RosProvider holds a ROS node and manages topic subscriptions on behalf of
 // browser WebSocket clients. goroslib subscribers are created lazily: a ROS
 // subscription is opened only when the first browser client subscribes to a
-// topic and closed when the last browser client unsubscribes.
+// topic and kept open permanently thereafter (torn down only by resetSubscribers).
 //
-// The sole exception is /xbot_positioning/xb_pose, which is kept permanently
-// active by the internal mowing-path tracker (id "gui").
+// Three permanent "sentinel" subscriptions are created at startup:
+//   - /xbot_positioning/xb_pose (id "gui"): mowing-path tracker
+//   - /mower_logic/current_state (id "internal"): state caching for lastMessage
+//   - /mower_map_service/json_map (id "internal"): feeds the synthetic /xbot_monitoring/map
 type RosProvider struct {
 	node           *goroslib.Node
 	mtx            sync.Mutex
@@ -134,19 +136,21 @@ func NewRosProvider(dbProvider types2.IDBProvider) types2.IRosProvider {
 		rosSubscribers: make(map[string]*goroslib.Subscriber),
 	}
 
-	// Start the internal mowing-path tracker. This is the only subscription
-	// opened unconditionally at startup; all browser-facing subscriptions are
-	// created on demand when the first client connects.
 	if err := r.initMowingPathSubscriber(); err != nil {
 		logrus.Error(err)
 	}
-
 	// Keep the high-level state topic permanently subscribed so lastMessage
 	// is always current. mower_logic only publishes on state transitions, so
-	// without this sentinel the goroslib subscriber would be created lazily
-	// when the first browser opens but torn down on navigation — causing the
-	// browser to miss transitions that happened while no client was connected.
+	// without this sentinel a browser that reconnects after a navigation would
+	// miss transitions that happened while no client was connected.
 	if err := r.initHighLevelStatusSubscriber(); err != nil {
+		logrus.Error(err)
+	}
+	// jsonMapHandler is wired as the goroslib callback for json_map but is
+	// only invoked when a goroslib subscriber exists. The browser subscribes to
+	// the synthetic /xbot_monitoring/map, so ensureRosSubscriber for json_map
+	// is never called by browser clients — we must open it here unconditionally.
+	if err := r.initJsonMapSubscriber(); err != nil {
 		logrus.Error(err)
 	}
 
@@ -278,6 +282,13 @@ func (p *RosProvider) resetSubscribers() {
 			delete(hlSubs, "internal")
 		}
 	}
+	var internalJsonMapRosSub *RosSubscriber
+	if jmSubs, ok := p.subscribers["/mower_map_service/json_map"]; ok {
+		if g, ok := jmSubs["internal"]; ok {
+			internalJsonMapRosSub = g
+			delete(jmSubs, "internal")
+		}
+	}
 	p.mowingPaths = []*nav_msgs.Path{}
 	p.mowingPath = nil
 	p.mowingPathOrigin = nil
@@ -289,6 +300,9 @@ func (p *RosProvider) resetSubscribers() {
 	}
 	if internalStateRosSub != nil {
 		internalStateRosSub.Close()
+	}
+	if internalJsonMapRosSub != nil {
+		internalJsonMapRosSub.Close()
 	}
 }
 
@@ -306,6 +320,10 @@ func (p *RosProvider) reconnectSubscribers() {
 	if hlSubs, ok := p.subscribers["/mower_logic/current_state"]; ok {
 		_, internalStateExists = hlSubs["internal"]
 	}
+	var internalJsonMapExists bool
+	if jmSubs, ok := p.subscribers["/mower_map_service/json_map"]; ok {
+		_, internalJsonMapExists = jmSubs["internal"]
+	}
 	p.mtx.Unlock()
 
 	if !guiExists {
@@ -316,6 +334,11 @@ func (p *RosProvider) reconnectSubscribers() {
 	if !internalStateExists {
 		if err := p.initHighLevelStatusSubscriber(); err != nil {
 			logrus.Error(xerrors.Errorf("failed to restore high-level status subscriber: %w", err))
+		}
+	}
+	if !internalJsonMapExists {
+		if err := p.initJsonMapSubscriber(); err != nil {
+			logrus.Error(xerrors.Errorf("failed to restore json map subscriber: %w", err))
 		}
 	}
 
@@ -419,6 +442,17 @@ func (p *RosProvider) initMowingPathSubscriber() error {
 func (p *RosProvider) initHighLevelStatusSubscriber() error {
 	return p.Subscribe("/mower_logic/current_state", "internal", func(msg []byte) {
 		// no-op: cbHandler already caches the state in lastMessage
+	})
+}
+
+// initJsonMapSubscriber permanently subscribes to /mower_map_service/json_map
+// so that jsonMapHandler (the goroslib callback) always runs and populates the
+// synthetic /xbot_monitoring/map topic. Without this sentinel the goroslib
+// subscriber for json_map is never created because browser clients subscribe
+// only to /xbot_monitoring/map, not to json_map directly.
+func (p *RosProvider) initJsonMapSubscriber() error {
+	return p.Subscribe("/mower_map_service/json_map", "internal", func(msg []byte) {
+		// no-op: jsonMapHandler handles the message and updates /xbot_monitoring/map
 	})
 }
 
