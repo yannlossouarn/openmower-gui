@@ -3,6 +3,10 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"sync"
+	"time"
+
 	"github.com/bluenviron/goroslib/v2"
 	"github.com/bluenviron/goroslib/v2/pkg/msgs/geometry_msgs"
 	"github.com/bluenviron/goroslib/v2/pkg/msgs/nav_msgs"
@@ -11,15 +15,12 @@ import (
 	"github.com/cedbossneo/openmower-gui/pkg/msgs/mower_msgs"
 	"github.com/cedbossneo/openmower-gui/pkg/msgs/std_msgs"
 	"github.com/cedbossneo/openmower-gui/pkg/msgs/xbot_msgs"
-	"math"
 	types2 "github.com/cedbossneo/openmower-gui/pkg/types"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/simplify"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
-	"sync"
-	"time"
 )
 
 type RosSubscriber struct {
@@ -76,28 +77,23 @@ func (r *RosSubscriber) processMessage(messageToProcess []byte) {
 	}
 }
 
+// RosProvider holds a ROS node and manages topic subscriptions on behalf of
+// browser WebSocket clients. goroslib subscribers are created lazily: a ROS
+// subscription is opened only when the first browser client subscribes to a
+// topic and closed when the last browser client unsubscribes.
+//
+// The sole exception is /xbot_positioning/xb_pose, which is kept permanently
+// active by the internal mowing-path tracker (id "gui").
 type RosProvider struct {
-	node                      *goroslib.Node
-	mtx                       sync.Mutex
-	statusSubscriber          *goroslib.Subscriber
-	highLevelStatusSubscriber *goroslib.Subscriber
-	gpsSubscriber             *goroslib.Subscriber
-	imuSubscriber             *goroslib.Subscriber
-	ticksSubscriber           *goroslib.Subscriber
-	mapSubscriber             *goroslib.Subscriber
-	pathSubscriber            *goroslib.Subscriber
-	currentPathSubscriber     *goroslib.Subscriber
-	poseSubscriber            *goroslib.Subscriber
-	powerSubscriber           *goroslib.Subscriber
-	emergencySubscriber       *goroslib.Subscriber
-	dockingSensorSubscriber   *goroslib.Subscriber
-	lidarSubscriber           *goroslib.Subscriber
-	subscribers               map[string]map[string]*RosSubscriber
-	lastMessage               map[string][]byte
-	mowingPaths               []*nav_msgs.Path
-	mowingPath                *nav_msgs.Path
-	mowingPathOrigin          orb.LineString
-	dbProvider                types2.IDBProvider
+	node           *goroslib.Node
+	mtx            sync.Mutex
+	rosSubscribers map[string]*goroslib.Subscriber  // topic -> active goroslib subscriber
+	subscribers    map[string]map[string]*RosSubscriber
+	lastMessage    map[string][]byte
+	mowingPaths    []*nav_msgs.Path
+	mowingPath     *nav_msgs.Path
+	mowingPathOrigin orb.LineString
+	dbProvider     types2.IDBProvider
 }
 
 func (p *RosProvider) getNode() (*goroslib.Node, error) {
@@ -128,23 +124,23 @@ func (p *RosProvider) getNode() (*goroslib.Node, error) {
 		WriteTimeout:  time.Minute,
 	})
 	return p.node, err
-
 }
 
 func NewRosProvider(dbProvider types2.IDBProvider) types2.IRosProvider {
 	r := &RosProvider{
-		dbProvider: dbProvider,
+		dbProvider:     dbProvider,
+		subscribers:    make(map[string]map[string]*RosSubscriber),
+		lastMessage:    make(map[string][]byte),
+		rosSubscribers: make(map[string]*goroslib.Subscriber),
 	}
-	err := r.initSubscribers()
-	if err != nil {
+
+	// Start the internal mowing-path tracker. This is the only subscription
+	// opened unconditionally at startup; all browser-facing subscriptions are
+	// created on demand when the first client connects.
+	if err := r.initMowingPathSubscriber(); err != nil {
 		logrus.Error(err)
-		return r
 	}
-	err = r.initMowingPathSubscriber()
-	if err != nil {
-		logrus.Error(err)
-		return r
-	}
+
 	go func() {
 		for range time.Tick(20 * time.Second) {
 			node, err := r.getNode()
@@ -157,66 +153,160 @@ func NewRosProvider(dbProvider types2.IDBProvider) types2.IRosProvider {
 				logrus.Error(xerrors.Errorf("failed to ping node: %w, restarting node", err))
 				r.resetSubscribers()
 			} else {
-				err = r.initSubscribers()
-				if err != nil {
-					logrus.Error(xerrors.Errorf("failed to init subscribers: %w", err))
-				}
-				err = r.initMowingPathSubscriber()
-				if err != nil {
-					logrus.Error(xerrors.Errorf("failed to init mowing path subscriber: %w", err))
-				}
+				r.reconnectSubscribers()
 			}
 		}
 	}()
 	return r
 }
 
+// newRosSubscriber creates a type-specific goroslib.Subscriber for a known
+// topic. Returns (nil, nil) for synthetic topics that have no direct ROS
+// backing (e.g. /mowing_path and /xbot_monitoring/map which are populated
+// internally).
+func (p *RosProvider) newRosSubscriber(topic string, node *goroslib.Node) (*goroslib.Subscriber, error) {
+	conf := goroslib.SubscriberConf{Node: node, Topic: topic, QueueSize: 1}
+	switch topic {
+	case "/ll/mower_status":
+		conf.Callback = cbHandler[*mower_msgs.Status](p, topic)
+	case "/mower_logic/current_state":
+		conf.Callback = cbHandler[*mower_msgs.HighLevelStatus](p, topic)
+	case "/ll/position/gps":
+		conf.Callback = cbHandler[*xbot_msgs.AbsolutePose](p, topic)
+	case "/xbot_positioning/xb_pose":
+		conf.Callback = cbHandler[*xbot_msgs.AbsolutePose](p, topic)
+	case "/ll/imu/data_raw":
+		conf.Callback = cbHandler[*sensor_msgs.Imu](p, topic)
+	case "/xbot_positioning/wheel_ticks_in":
+		conf.Callback = cbHandler[*xbot_msgs.WheelTick](p, topic)
+	case "/mower_map_service/json_map":
+		conf.Callback = p.jsonMapHandler
+	case "/slic3r_coverage_planner/path_marker_array":
+		conf.Callback = cbHandler[*visualization_msgs.MarkerArray](p, topic)
+	case "/move_base_flex/FTCPlanner/global_plan":
+		conf.Callback = cbHandler[*nav_msgs.Path](p, topic)
+	case "/ll/power":
+		conf.Callback = cbHandler[*mower_msgs.Power](p, topic)
+	case "/ll/emergency":
+		conf.Callback = cbHandler[*mower_msgs.Emergency](p, topic)
+	case "/mower/docking_sensor":
+		conf.Callback = cbHandler[*mower_msgs.DockingSensor](p, topic)
+	case "/scan":
+		conf.Callback = cbHandler[*sensor_msgs.LaserScan](p, topic)
+	case "/mowing_path", "/xbot_monitoring/map":
+		return nil, nil // synthetic: populated internally, no goroslib subscriber
+	default:
+		logrus.Warnf("RosProvider: no goroslib factory for topic %q; messages will not flow", topic)
+		return nil, nil
+	}
+	sub, err := goroslib.NewSubscriber(conf)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("Subscribed to %s", topic)
+	return sub, nil
+}
+
+// ensureRosSubscriber lazily creates the goroslib subscriber for topic if one
+// does not already exist. It is safe to call concurrently.
+func (p *RosProvider) ensureRosSubscriber(topic string) error {
+	p.mtx.Lock()
+	_, exists := p.rosSubscribers[topic]
+	p.mtx.Unlock()
+	if exists {
+		return nil
+	}
+
+	node, err := p.getNode()
+	if err != nil {
+		return err
+	}
+
+	sub, err := p.newRosSubscriber(topic, node)
+	if err != nil {
+		return err
+	}
+	if sub == nil {
+		return nil // synthetic or unknown topic — no goroslib subscriber needed
+	}
+
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	if _, exists := p.rosSubscribers[topic]; !exists {
+		p.rosSubscribers[topic] = sub
+	} else {
+		sub.Close() // lost the race — discard the duplicate
+	}
+	return nil
+}
+
 func (p *RosProvider) resetSubscribers() {
+	// Step 1: tear down the node so goroslib stops delivering messages.
 	if p.node != nil {
 		p.node.Close()
+		p.node = nil
 	}
-	p.currentPathSubscriber.Close()
-	p.gpsSubscriber.Close()
-	p.highLevelStatusSubscriber.Close()
-	p.imuSubscriber.Close()
-	p.mapSubscriber.Close()
-	p.pathSubscriber.Close()
-	p.statusSubscriber.Close()
-	p.ticksSubscriber.Close()
-	p.poseSubscriber.Close()
-	if p.powerSubscriber != nil {
-		p.powerSubscriber.Close()
+
+	// Step 2: under the lock, close all goroslib subscribers and extract the
+	// "gui" mowing-path RosSubscriber for deferred close (its callback holds
+	// p.mtx, so we must not close it while the lock is held).
+	p.mtx.Lock()
+	for topic, sub := range p.rosSubscribers {
+		sub.Close()
+		delete(p.rosSubscribers, topic)
 	}
-	if p.emergencySubscriber != nil {
-		p.emergencySubscriber.Close()
+	var guiRosSub *RosSubscriber
+	if xbPose, ok := p.subscribers["/xbot_positioning/xb_pose"]; ok {
+		if g, ok := xbPose["gui"]; ok {
+			guiRosSub = g
+			delete(xbPose, "gui")
+		}
 	}
-	if p.dockingSensorSubscriber != nil {
-		p.dockingSensorSubscriber.Close()
-	}
-	if p.lidarSubscriber != nil {
-		p.lidarSubscriber.Close()
-	}
-	p.node = nil
-	p.currentPathSubscriber = nil
-	p.gpsSubscriber = nil
-	p.highLevelStatusSubscriber = nil
-	p.imuSubscriber = nil
-	p.mapSubscriber = nil
-	p.pathSubscriber = nil
-	p.statusSubscriber = nil
-	p.ticksSubscriber = nil
-	p.poseSubscriber = nil
-	p.powerSubscriber = nil
-	p.emergencySubscriber = nil
-	p.dockingSensorSubscriber = nil
-	p.lidarSubscriber = nil
 	p.mowingPaths = []*nav_msgs.Path{}
 	p.mowingPath = nil
 	p.mowingPathOrigin = nil
-	xbPose := p.subscribers["/xbot_positioning/xb_pose"]
-	if xbPose != nil {
-		for _, sub := range xbPose {
-			sub.Close()
+	p.mtx.Unlock()
+
+	// Step 3: close the "gui" subscriber after releasing the lock.
+	if guiRosSub != nil {
+		guiRosSub.Close()
+	}
+}
+
+// reconnectSubscribers restores subscriptions after the node reconnects.
+// It recreates goroslib subscribers for any topic that still has active
+// browser clients, and restores the internal mowing-path tracker if needed.
+func (p *RosProvider) reconnectSubscribers() {
+	// Restore the mowing-path internal subscriber if it was cleared by reset.
+	p.mtx.Lock()
+	var guiExists bool
+	if xbPose, ok := p.subscribers["/xbot_positioning/xb_pose"]; ok {
+		_, guiExists = xbPose["gui"]
+	}
+	p.mtx.Unlock()
+
+	if !guiExists {
+		if err := p.initMowingPathSubscriber(); err != nil {
+			logrus.Error(xerrors.Errorf("failed to restore mowing path subscriber: %w", err))
+		}
+	}
+
+	// Recreate goroslib subscribers for topics with active browser clients
+	// that lost their backing during the reset.
+	p.mtx.Lock()
+	topicsNeedingReconnect := make([]string, 0, len(p.subscribers))
+	for topic, subs := range p.subscribers {
+		if len(subs) > 0 {
+			if _, exists := p.rosSubscribers[topic]; !exists {
+				topicsNeedingReconnect = append(topicsNeedingReconnect, topic)
+			}
+		}
+	}
+	p.mtx.Unlock()
+
+	for _, topic := range topicsNeedingReconnect {
+		if err := p.ensureRosSubscriber(topic); err != nil {
+			logrus.Error(xerrors.Errorf("failed to reconnect to %s: %w", topic, err))
 		}
 	}
 }
@@ -317,25 +407,25 @@ func (p *RosProvider) CallService(ctx context.Context, srvName string, srv any, 
 	return nil
 }
 
+// Subscribe registers cb to receive JSON-encoded messages for topic. The
+// underlying goroslib subscriber is created lazily on first call for a given
+// topic and torn down when the last subscriber unregisters.
 func (p *RosProvider) Subscribe(topic string, id string, cb func(msg []byte)) error {
-	err := p.initSubscribers()
-	if err != nil {
+	if err := p.ensureRosSubscriber(topic); err != nil {
 		return err
 	}
+
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	subscriber, hasSubscriber := p.subscribers[topic]
-	if !hasSubscriber {
+
+	if p.subscribers[topic] == nil {
 		p.subscribers[topic] = make(map[string]*RosSubscriber)
-		subscriber, _ = p.subscribers[topic]
 	}
-	_, hasCallback := subscriber[id]
-	if !hasCallback {
-		subscriber[id] = NewRosSubscriber(topic, id, cb)
+	if _, hasCallback := p.subscribers[topic][id]; !hasCallback {
+		p.subscribers[topic][id] = NewRosSubscriber(topic, id, cb)
 	}
-	lastMessage, hasLastMessage := p.lastMessage[topic]
-	if hasLastMessage {
-		subscriber[id].Publish(lastMessage)
+	if lastMessage, hasLastMessage := p.lastMessage[topic]; hasLastMessage {
+		p.subscribers[topic][id].Publish(lastMessage)
 	}
 	return nil
 }
@@ -353,147 +443,32 @@ func (p *RosProvider) Publisher(topic string, obj interface{}) (*goroslib.Publis
 	return publisher, nil
 }
 
+// UnSubscribe removes the subscriber identified by (topic, id). When the last
+// subscriber for a topic is removed, the backing goroslib subscriber is closed
+// and the ROS subscription is dropped.
 func (p *RosProvider) UnSubscribe(topic string, id string) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	_, hasSubscriber := p.subscribers[topic][id]
-	if hasSubscriber {
-		p.subscribers[topic][id].Close()
-		delete(p.subscribers[topic], id)
-	}
-}
 
-func (p *RosProvider) initSubscribers() error {
-	node, err := p.getNode()
-	if err != nil {
-		return err
+	topicSubs, ok := p.subscribers[topic]
+	if !ok {
+		return
 	}
-	if p.subscribers == nil {
-		p.subscribers = make(map[string]map[string]*RosSubscriber)
+	sub, exists := topicSubs[id]
+	if !exists {
+		return
 	}
-	if p.lastMessage == nil {
-		p.lastMessage = make(map[string][]byte)
-	}
-	if p.statusSubscriber == nil {
-		p.statusSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/ll/mower_status",
-			Callback:  cbHandler[*mower_msgs.Status](p, "/ll/mower_status"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /ll/mower_status")
-	}
-	if p.highLevelStatusSubscriber == nil {
-		p.highLevelStatusSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/mower_logic/current_state",
-			Callback:  cbHandler[*mower_msgs.HighLevelStatus](p, "/mower_logic/current_state"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /mower_logic/current_state")
-	}
-	if p.gpsSubscriber == nil {
-		p.gpsSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/ll/position/gps",
-			Callback:  cbHandler[*xbot_msgs.AbsolutePose](p, "/ll/position/gps"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /ll/position/gps")
-	}
-	if p.poseSubscriber == nil {
-		p.poseSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/xbot_positioning/xb_pose",
-			Callback:  cbHandler[*xbot_msgs.AbsolutePose](p, "/xbot_positioning/xb_pose"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /xbot_positioning/xb_pose")
-	}
-	if p.imuSubscriber == nil {
-		p.imuSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/ll/imu/data_raw",
-			Callback:  cbHandler[*sensor_msgs.Imu](p, "/ll/imu/data_raw"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /ll/imu/data_raw")
-	}
-	if p.ticksSubscriber == nil {
-		p.ticksSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/xbot_positioning/wheel_ticks_in",
-			Callback:  cbHandler[*xbot_msgs.WheelTick](p, "/xbot_positioning/wheel_ticks_in"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /xbot_positioning/wheel_ticks_in")
-	}
-	if p.mapSubscriber == nil {
-		p.mapSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/mower_map_service/json_map",
-			Callback:  p.jsonMapHandler,
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /mower_map_service/json_map")
-	}
-	if p.pathSubscriber == nil {
-		p.pathSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/slic3r_coverage_planner/path_marker_array",
-			Callback:  cbHandler[*visualization_msgs.MarkerArray](p, "/slic3r_coverage_planner/path_marker_array"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /slic3r_coverage_planner/path_marker_array")
-	}
-	if p.currentPathSubscriber == nil {
-		p.currentPathSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/move_base_flex/FTCPlanner/global_plan",
-			Callback:  cbHandler[*nav_msgs.Path](p, "/move_base_flex/FTCPlanner/global_plan"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /move_base_flex/FTCPlanner/global_plan")
-	}
-	if p.powerSubscriber == nil {
-		p.powerSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/ll/power",
-			Callback:  cbHandler[*mower_msgs.Power](p, "/ll/power"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /ll/power")
-	}
-	if p.emergencySubscriber == nil {
-		p.emergencySubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/ll/emergency",
-			Callback:  cbHandler[*mower_msgs.Emergency](p, "/ll/emergency"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /ll/emergency")
-	}
-	if p.dockingSensorSubscriber == nil {
-		p.dockingSensorSubscriber, err = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/mower/docking_sensor",
-			Callback:  cbHandler[*mower_msgs.DockingSensor](p, "/mower/docking_sensor"),
-			QueueSize: 1,
-		})
-		logrus.Info("Subscribed to /mower/docking_sensor")
-	}
-	if p.lidarSubscriber == nil {
-		p.lidarSubscriber, _ = goroslib.NewSubscriber(goroslib.SubscriberConf{
-			Node:      node,
-			Topic:     "/scan",
-			Callback:  cbHandler[*sensor_msgs.LaserScan](p, "/scan"),
-			QueueSize: 1,
-		})
-		if p.lidarSubscriber != nil {
-			logrus.Info("Subscribed to /scan")
+	sub.Close()
+	delete(topicSubs, id)
+
+	// Close the goroslib subscriber when the last client leaves.
+	if len(topicSubs) == 0 {
+		if rosSub, ok := p.rosSubscribers[topic]; ok {
+			rosSub.Close()
+			delete(p.rosSubscribers, topic)
+			logrus.Infof("Unsubscribed from %s (no remaining clients)", topic)
 		}
 	}
-	return nil
 }
 
 func cbHandler[T any](p *RosProvider, topic string) func(msg T) {
@@ -530,10 +505,10 @@ type jsonMapArea struct {
 
 // jsonDockingStation represents a docking station in the JSON map format
 type jsonDockingStation struct {
-	ID         string            `json:"id"`
+	ID         string                 `json:"id"`
 	Properties map[string]interface{} `json:"properties"`
-	Position   jsonMapPoint      `json:"position"`
-	Heading    float64           `json:"heading"`
+	Position   jsonMapPoint           `json:"position"`
+	Heading    float64                `json:"heading"`
 }
 
 // jsonMapData represents the full JSON map from mower_map_service
@@ -602,10 +577,18 @@ func (p *RosProvider) jsonMapHandler(msg *std_msgs.String) {
 
 		// Update bounds from all area types
 		for _, pt := range area.Outline {
-			if pt.X < minX { minX = pt.X }
-			if pt.X > maxX { maxX = pt.X }
-			if pt.Y < minY { minY = pt.Y }
-			if pt.Y > maxY { maxY = pt.Y }
+			if pt.X < minX {
+				minX = pt.X
+			}
+			if pt.X > maxX {
+				maxX = pt.X
+			}
+			if pt.Y < minY {
+				minY = pt.Y
+			}
+			if pt.Y > maxY {
+				maxY = pt.Y
+			}
 		}
 	}
 

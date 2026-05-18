@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [master, v2]
+    branches: [master, v2, feat/lazy-ros-subscriptions]
   pull_request:
     branches: [master, v2]
 
