@@ -141,6 +141,15 @@ func NewRosProvider(dbProvider types2.IDBProvider) types2.IRosProvider {
 		logrus.Error(err)
 	}
 
+	// Keep the high-level state topic permanently subscribed so lastMessage
+	// is always current. mower_logic only publishes on state transitions, so
+	// without this sentinel the goroslib subscriber would be created lazily
+	// when the first browser opens but torn down on navigation — causing the
+	// browser to miss transitions that happened while no client was connected.
+	if err := r.initHighLevelStatusSubscriber(); err != nil {
+		logrus.Error(err)
+	}
+
 	go func() {
 		for range time.Tick(20 * time.Second) {
 			node, err := r.getNode()
@@ -262,32 +271,51 @@ func (p *RosProvider) resetSubscribers() {
 			delete(xbPose, "gui")
 		}
 	}
+	var internalStateRosSub *RosSubscriber
+	if hlSubs, ok := p.subscribers["/mower_logic/current_state"]; ok {
+		if g, ok := hlSubs["internal"]; ok {
+			internalStateRosSub = g
+			delete(hlSubs, "internal")
+		}
+	}
 	p.mowingPaths = []*nav_msgs.Path{}
 	p.mowingPath = nil
 	p.mowingPathOrigin = nil
 	p.mtx.Unlock()
 
-	// Step 3: close the "gui" subscriber after releasing the lock.
+	// Step 3: close the sentinel subscribers after releasing the lock.
 	if guiRosSub != nil {
 		guiRosSub.Close()
+	}
+	if internalStateRosSub != nil {
+		internalStateRosSub.Close()
 	}
 }
 
 // reconnectSubscribers restores subscriptions after the node reconnects.
 // It recreates goroslib subscribers for any topic that still has active
-// browser clients, and restores the internal mowing-path tracker if needed.
+// browser clients, and restores the internal sentinel subscribers if needed.
 func (p *RosProvider) reconnectSubscribers() {
-	// Restore the mowing-path internal subscriber if it was cleared by reset.
+	// Restore the internal sentinel subscribers if they were cleared by reset.
 	p.mtx.Lock()
 	var guiExists bool
 	if xbPose, ok := p.subscribers["/xbot_positioning/xb_pose"]; ok {
 		_, guiExists = xbPose["gui"]
+	}
+	var internalStateExists bool
+	if hlSubs, ok := p.subscribers["/mower_logic/current_state"]; ok {
+		_, internalStateExists = hlSubs["internal"]
 	}
 	p.mtx.Unlock()
 
 	if !guiExists {
 		if err := p.initMowingPathSubscriber(); err != nil {
 			logrus.Error(xerrors.Errorf("failed to restore mowing path subscriber: %w", err))
+		}
+	}
+	if !internalStateExists {
+		if err := p.initHighLevelStatusSubscriber(); err != nil {
+			logrus.Error(xerrors.Errorf("failed to restore high-level status subscriber: %w", err))
 		}
 	}
 
@@ -384,6 +412,14 @@ func (p *RosProvider) initMowingPathSubscriber() error {
 		}
 	})
 	return err
+}
+
+// initHighLevelStatusSubscriber permanently subscribes to the state-machine
+// topic using an "internal" sentinel so lastMessage is always up to date.
+func (p *RosProvider) initHighLevelStatusSubscriber() error {
+	return p.Subscribe("/mower_logic/current_state", "internal", func(msg []byte) {
+		// no-op: cbHandler already caches the state in lastMessage
+	})
 }
 
 func (p *RosProvider) CallService(ctx context.Context, srvName string, srv any, req any, res any) error {
