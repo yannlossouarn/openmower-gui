@@ -479,9 +479,11 @@ func (p *RosProvider) Publisher(topic string, obj interface{}) (*goroslib.Publis
 	return publisher, nil
 }
 
-// UnSubscribe removes the subscriber identified by (topic, id). When the last
-// subscriber for a topic is removed, the backing goroslib subscriber is closed
-// and the ROS subscription is dropped.
+// UnSubscribe removes the browser client identified by (topic, id).
+// The backing goroslib subscriber is intentionally kept open so that
+// lastMessage stays current and there is no close/reopen race when
+// the user navigates between pages. goroslib subscribers are only
+// torn down during a full reset (resetSubscribers).
 func (p *RosProvider) UnSubscribe(topic string, id string) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -496,15 +498,6 @@ func (p *RosProvider) UnSubscribe(topic string, id string) {
 	}
 	sub.Close()
 	delete(topicSubs, id)
-
-	// Close the goroslib subscriber when the last client leaves.
-	if len(topicSubs) == 0 {
-		if rosSub, ok := p.rosSubscribers[topic]; ok {
-			rosSub.Close()
-			delete(p.rosSubscribers, topic)
-			logrus.Infof("Unsubscribed from %s (no remaining clients)", topic)
-		}
-	}
 }
 
 func cbHandler[T any](p *RosProvider, topic string) func(msg T) {
