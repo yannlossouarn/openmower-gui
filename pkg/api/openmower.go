@@ -107,6 +107,7 @@ func ReplaceMapRoute(group *gin.RouterGroup, provider types.IRosProvider) {
 				return
 			}
 			for _, element := range CallReq.Areas {
+				element.Area.Active = true
 				err = provider.CallService(c.Request.Context(), "/mower_map_service/add_mowing_area", &mower_map.AddMowingAreaSrv{}, &element, &mower_map.AddMowingAreaSrvRes{})
 				if err != nil {
 					c.JSON(500, ErrorResponse{Error: err.Error()})
