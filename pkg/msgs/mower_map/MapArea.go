@@ -9,9 +9,13 @@ import (
 
 
 type MapArea struct {
-    msg.Package `ros:"mower_map"`
-    Name string
-    Area geometry_msgs.Polygon
-    Obstacles []geometry_msgs.Polygon
+    msg.Package         `ros:"mower_map"`
+    Name                string
+    Active              bool
+    Area                geometry_msgs.Polygon
+    Obstacles           []geometry_msgs.Polygon
+    Angle               float64
+    OutlineCount        int32   `rosname:"outline_count"`
+    OutlineOverlapCount int32   `rosname:"outline_overlap_count"`
+    OutlineOffset       float64 `rosname:"outline_offset"`
 }
-
