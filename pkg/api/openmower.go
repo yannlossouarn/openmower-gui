@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
+	"math"
 	"net/http"
 	"time"
 
@@ -24,6 +27,32 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+// rawAreaOverride is used to detect which per-area override fields the frontend
+// explicitly sent (pointer = nil when the JSON key is absent or null).
+type rawAreaOverride struct {
+	Angle               *float64 `json:"angle"`
+	OutlineCount        *int32   `json:"outline_count"`
+	OutlineOverlapCount *int32   `json:"outline_overlap_count"`
+	OutlineOffset       *float64 `json:"outline_offset"`
+}
+type rawReplaceMapBody struct {
+	Areas []struct {
+		Area rawAreaOverride `json:"area"`
+	} `json:"areas"`
+}
+
+// MowingAreaDetails is the response shape for GET /openmower/map/areas.
+// Pointer fields are nil when no per-area override is set (global param applies).
+type MowingAreaDetails struct {
+	Index               int      `json:"index"`
+	Name                string   `json:"name"`
+	Active              bool     `json:"active"`
+	Angle               *float64 `json:"angle"`
+	OutlineCount        *int32   `json:"outline_count"`
+	OutlineOverlapCount *int32   `json:"outline_overlap_count"`
+	OutlineOffset       *float64 `json:"outline_offset"`
+}
+
 func OpenMowerRoutes(r *gin.RouterGroup, provider types.IRosProvider) {
 	group := r.Group("/openmower")
 	ServiceRoute(group, provider)
@@ -31,6 +60,7 @@ func OpenMowerRoutes(r *gin.RouterGroup, provider types.IRosProvider) {
 	SetDockingPointRoute(group, provider)
 	ClearMapRoute(group, provider)
 	ReplaceMapRoute(group, provider)
+	AreaDetailsRoute(group, provider)
 	SubscriberRoute(group, provider)
 	PublisherRoute(group, provider)
 }
@@ -95,28 +125,112 @@ func ClearMapRoute(group *gin.RouterGroup, provider types.IRosProvider) {
 // @Router /openmower/map [put]
 func ReplaceMapRoute(group *gin.RouterGroup, provider types.IRosProvider) {
 	group.PUT("/map", func(c *gin.Context) {
-		err := provider.CallService(c.Request.Context(), "/mower_map_service/clear_map", &mower_map.ClearMapSrv{}, &mower_map.ClearMapSrvReq{}, &mower_map.ClearMapSrvRes{})
+		// Read the body once so we can parse it twice
+		bodyBytes, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(500, ErrorResponse{Error: err.Error()})
 			return
-		} else {
-			var CallReq mower_map.ReplaceMowingAreaSrvReq
-			err := unmarshalROSMessage[*mower_map.ReplaceMowingAreaSrvReq](c.Request.Body, &CallReq)
+		}
+
+		// Parse per-area override fields using pointer types so we can detect
+		// absent/null JSON keys (nil pointer = not set = use global parameter).
+		var rawBody rawReplaceMapBody
+		_ = json.Unmarshal(bodyBytes, &rawBody) // best-effort; errors mean no overrides
+
+		// Clear the existing map
+		err = provider.CallService(c.Request.Context(), "/mower_map_service/clear_map", &mower_map.ClearMapSrv{}, &mower_map.ClearMapSrvReq{}, &mower_map.ClearMapSrvRes{})
+		if err != nil {
+			c.JSON(500, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		// Unmarshal geometry via mapstructure (existing path)
+		var CallReq mower_map.ReplaceMowingAreaSrvReq
+		err = unmarshalROSMessage[*mower_map.ReplaceMowingAreaSrvReq](io.NopCloser(bytes.NewReader(bodyBytes)), &CallReq)
+		if err != nil {
+			c.JSON(500, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		for i, element := range CallReq.Areas {
+			element.Area.Active = true
+			// Default all override fields to sentinel values (= use global parameter)
+			element.Area.Angle = math.NaN()
+			element.Area.OutlineCount = -1
+			element.Area.OutlineOverlapCount = -1
+			element.Area.OutlineOffset = math.NaN()
+			// Apply explicit overrides only for fields the frontend actually sent
+			if i < len(rawBody.Areas) {
+				ro := rawBody.Areas[i].Area
+				if ro.Angle != nil {
+					element.Area.Angle = *ro.Angle
+				}
+				if ro.OutlineCount != nil {
+					element.Area.OutlineCount = *ro.OutlineCount
+				}
+				if ro.OutlineOverlapCount != nil {
+					element.Area.OutlineOverlapCount = *ro.OutlineOverlapCount
+				}
+				if ro.OutlineOffset != nil {
+					element.Area.OutlineOffset = *ro.OutlineOffset
+				}
+			}
+			err = provider.CallService(c.Request.Context(), "/mower_map_service/add_mowing_area", &mower_map.AddMowingAreaSrv{}, &element, &mower_map.AddMowingAreaSrvRes{})
 			if err != nil {
 				c.JSON(500, ErrorResponse{Error: err.Error()})
 				return
 			}
-			for _, element := range CallReq.Areas {
-				element.Area.Active = true
-				err = provider.CallService(c.Request.Context(), "/mower_map_service/add_mowing_area", &mower_map.AddMowingAreaSrv{}, &element, &mower_map.AddMowingAreaSrvRes{})
-				if err != nil {
-					c.JSON(500, ErrorResponse{Error: err.Error()})
-					return
-				}
-			}
-
-			c.JSON(200, OkResponse{})
 		}
+
+		c.JSON(200, OkResponse{})
+	})
+}
+
+// AreaDetailsRoute returns per-area override parameters.
+//
+// @Summary get area details
+// @Description get per-area details including override parameters (nil = use global)
+// @Tags openmower
+// @Produce  json
+// @Success 200 {array} MowingAreaDetails
+// @Failure 500 {object} ErrorResponse
+// @Router /openmower/map/areas [get]
+func AreaDetailsRoute(group *gin.RouterGroup, provider types.IRosProvider) {
+	group.GET("/map/areas", func(c *gin.Context) {
+		var details []MowingAreaDetails
+		for i := 0; i < 64; i++ {
+			req := mower_map.GetMowingAreaSrvReq{Index: uint32(i)}
+			res := mower_map.GetMowingAreaSrvRes{}
+			err := provider.CallService(c.Request.Context(), "/mower_map_service/get_mowing_area", &mower_map.GetMowingAreaSrv{}, &req, &res)
+			if err != nil {
+				// No area at this index — we've enumerated all areas
+				break
+			}
+			area := res.Area
+			d := MowingAreaDetails{
+				Index:  i,
+				Name:   area.Name,
+				Active: area.Active,
+			}
+			// Sentinel values mean "no per-area override, use global parameter"
+			if !math.IsNaN(area.Angle) {
+				d.Angle = &area.Angle
+			}
+			if area.OutlineCount != -1 {
+				d.OutlineCount = &area.OutlineCount
+			}
+			if area.OutlineOverlapCount != -1 {
+				d.OutlineOverlapCount = &area.OutlineOverlapCount
+			}
+			if !math.IsNaN(area.OutlineOffset) {
+				d.OutlineOffset = &area.OutlineOffset
+			}
+			details = append(details, d)
+		}
+		if details == nil {
+			details = []MowingAreaDetails{}
+		}
+		c.JSON(200, details)
 	})
 }
 

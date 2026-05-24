@@ -196,6 +196,31 @@ export const MapPage: React.FC<{compact?: boolean}> = ({compact = false}) => {
             console.debug(newFeatures);
         }
         setFeatures(newFeatures)
+
+        // Asynchronously fetch per-area override parameters and merge them into
+        // features. The map stream doesn't carry override fields, so we fetch
+        // them separately from the dedicated endpoint.
+        if (map?.WorkingArea?.length) {
+            guiApi.openmower.mapAreas().then(({data}) => {
+                if (!data) return;
+                setFeatures(curr => {
+                    const next = {...curr};
+                    for (const detail of data) {
+                        const featureId = `area-${detail.index}-area-0`;
+                        const feat = next[featureId];
+                        if (feat instanceof MowingAreaFeature) {
+                            feat.properties.angle = detail.angle;
+                            feat.properties.outline_count = detail.outline_count;
+                            feat.properties.outline_overlap_count = detail.outline_overlap_count;
+                            feat.properties.outline_offset = detail.outline_offset;
+                        }
+                    }
+                    return next;
+                });
+            }).catch(() => {
+                // Endpoint unavailable (older backend) — ignore silently
+            });
+        }
     }, [map, path, plan, offsetX, offsetY, datum]);
 
     useEffect(() => {

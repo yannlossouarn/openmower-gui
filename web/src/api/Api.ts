@@ -90,6 +90,25 @@ export interface MowerMapMapArea {
     "msg.Package"?: number;
     name?: string;
     obstacles?: GeometryMsgsPolygon[];
+    /** Per-area override fields. null / absent = use global parameter. */
+    angle?: number | null;
+    outline_count?: number | null;
+    outline_overlap_count?: number | null;
+    outline_offset?: number | null;
+}
+
+/**
+ * Response shape of GET /openmower/map/areas.
+ * Pointer fields are null when no per-area override is set (global param applies).
+ */
+export interface MowingAreaDetails {
+    index: number;
+    name: string;
+    active: boolean;
+    angle: number | null;
+    outline_count: number | null;
+    outline_overlap_count: number | null;
+    outline_offset: number | null;
 }
 
 export interface MowerMapSetDockingPointSrvReq {
@@ -509,6 +528,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
             ...params,
         }),
           
+
+      /**
+       * @description get per-area details including override parameters
+       *
+       * @tags openmower
+       * @name mapAreas
+       * @summary get area details with override parameters
+       * @request GET:/openmower/map/areas
+       */
+      mapAreas: (params: RequestParams = {}) =>
+          this.request<MowingAreaDetails[], ApiErrorResponse>({
+              path: `/openmower/map/areas`,
+              method: "GET",
+              format: "json",
+              ...params,
+          }),
 
       /**
        * @description set the docking point

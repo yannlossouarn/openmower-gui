@@ -100,6 +100,11 @@ export class MowingFeatureBase extends MowingFeature implements Feature<Polygon>
         , index: number
         , mowing_order: number
         , feature_type: string
+        /** Per-area override parameters. null/undefined = use global default. */
+        , angle?: number | null
+        , outline_count?: number | null
+        , outline_overlap_count?: number | null
+        , outline_offset?: number | null
     }
     bbox?: BBox | undefined;
 

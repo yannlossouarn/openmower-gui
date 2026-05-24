@@ -91,10 +91,17 @@ export function useMapFiles({
             });
             const points = dedupePoints(rawPoints);
 
-            areas[type][index] = {
+            const areaEntry: MowerMapMapArea = {
                 name: f.properties?.name ?? '',
                 area: {points},
             };
+            // Only include override fields when explicitly set (not null/undefined).
+            // Absent fields cause the Go backend to use sentinel values = global defaults.
+            if (typeof f.properties?.angle === 'number') areaEntry.angle = f.properties.angle;
+            if (typeof f.properties?.outline_count === 'number') areaEntry.outline_count = f.properties.outline_count;
+            if (typeof f.properties?.outline_overlap_count === 'number') areaEntry.outline_overlap_count = f.properties.outline_overlap_count;
+            if (typeof f.properties?.outline_offset === 'number') areaEntry.outline_offset = f.properties.outline_offset;
+            areas[type][index] = areaEntry;
         }
 
         // Process obstacles and attach them to their parent area

@@ -755,6 +755,10 @@ export function useMapEditing({
                 orig_mowing_order: props?.mowing_order ?? 9999,
                 feature_type: ftype,
                 orig_feature_type: ftype,
+                angle: props?.angle ?? null,
+                outline_count: props?.outline_count ?? null,
+                outline_overlap_count: props?.outline_overlap_count ?? null,
+                outline_offset: props?.outline_offset ?? null,
             } as MowingAreaEdit);
             setAreaModelOpen(true);
         },
@@ -1057,14 +1061,21 @@ export function useMapEditing({
                         curMowingAreaFeature.mowing_order
                     );
                     replacement.setGeometry(geometry);
-                    (replacement as MowingAreaFeature).setName(
-                        curMowingAreaFeature.name
-                    );
+                    (replacement as MowingAreaFeature).setName(curMowingAreaFeature.name);
+                    replacement.properties.angle = curMowingAreaFeature.angle;
+                    replacement.properties.outline_count = curMowingAreaFeature.outline_count;
+                    replacement.properties.outline_overlap_count = curMowingAreaFeature.outline_overlap_count;
+                    replacement.properties.outline_offset = curMowingAreaFeature.outline_offset;
                     break;
             }
             newFeatures[newId] = replacement;
         } else if (oldFeature instanceof MowingAreaFeature) {
             oldFeature.setName(curMowingAreaFeature.name);
+            // Persist per-area overrides (null = cleared = use global default)
+            oldFeature.properties.angle = curMowingAreaFeature.angle;
+            oldFeature.properties.outline_count = curMowingAreaFeature.outline_count;
+            oldFeature.properties.outline_overlap_count = curMowingAreaFeature.outline_overlap_count;
+            oldFeature.properties.outline_offset = curMowingAreaFeature.outline_offset;
             if (
                 curMowingAreaFeature.mowing_order !==
                 curMowingAreaFeature.orig_mowing_order
