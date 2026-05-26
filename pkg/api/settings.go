@@ -254,7 +254,11 @@ func PostSettings(r *gin.RouterGroup, dbProvider types.IDBProvider) gin.IRoutes 
 			settings[k] = v
 		}
 
-		// Write settings to file mower_config.sh
+		// Write settings to file mower_config.sh.
+		// When OM_MOWER is "Mowgli", OM_HARDWARE_VERSION must be commented out so
+		// that the container entrypoint keeps HARDWARE_PLATFORM at its default of 1,
+		// which is required for the GPS driver (xbot_driver_gps) to start.
+		isMowgli := settings["OM_MOWER"] == "Mowgli"
 		var fileContent string
 		for key, value := range settings {
 			if key == "custom_environment" {
@@ -265,6 +269,10 @@ func PostSettings(r *gin.RouterGroup, dbProvider types.IDBProvider) gin.IRoutes 
 			}
 			if value == false {
 				value = "False"
+			}
+			if key == "OM_HARDWARE_VERSION" && isMowgli {
+				fileContent += "#export " + key + "=" + fmt.Sprintf("%#v", value) + "\n"
+				continue
 			}
 			fileContent += "export " + key + "=" + fmt.Sprintf("%#v", value) + "\n"
 		}
@@ -403,6 +411,11 @@ func syncToShellConfig(payload map[string]any, dbProvider types.IDBProvider) err
 		settings[key] = value
 	}
 
+	// When OM_MOWER is "Mowgli", OM_HARDWARE_VERSION must be commented out so
+	// that the container entrypoint keeps HARDWARE_PLATFORM at its default of 1,
+	// which is required for the GPS driver (xbot_driver_gps) to start.
+	isMowgli := settings["OM_MOWER"] == "Mowgli"
+
 	// Write back
 	var fileContent string
 	for key, value := range settings {
@@ -411,6 +424,10 @@ func syncToShellConfig(payload map[string]any, dbProvider types.IDBProvider) err
 		}
 		if value == false {
 			value = "False"
+		}
+		if key == "OM_HARDWARE_VERSION" && isMowgli {
+			fileContent += "#export " + key + "=" + fmt.Sprintf("%#v", value) + "\n"
+			continue
 		}
 		fileContent += "export " + key + "=" + fmt.Sprintf("%#v", value) + "\n"
 	}
