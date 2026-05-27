@@ -448,6 +448,24 @@ var (
 	schemaCacheTTL  = 1 * time.Hour
 )
 
+// readMowerConfigValues reads the mower_config.sh file and returns its parsed
+// key-value pairs.  Returns an empty map (not an error) when the file does not
+// exist yet.
+func readMowerConfigValues(dbProvider types.IDBProvider) (map[string]string, error) {
+	mowerConfigFilePath, err := dbProvider.Get("system.mower.configFile")
+	if err != nil {
+		return nil, fmt.Errorf("get config file path: %w", err)
+	}
+	content, err := os.ReadFile(string(mowerConfigFilePath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("read config file: %w", err)
+	}
+	return godotenv.Parse(strings.NewReader(string(content)))
+}
+
 // fetchSchemaFromUpstream fetches the JSON Schema from the upstream OpenMower repository.
 func fetchSchemaFromUpstream(schemaURL string) (map[string]any, error) {
 	client := &http.Client{Timeout: 15 * time.Second}

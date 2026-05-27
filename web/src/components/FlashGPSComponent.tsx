@@ -15,20 +15,15 @@ export const FlashGPSComponent = (props: { onNext: () => void, onPrevious: () =>
     const [data, setData] = useState<string[]>()
     const flashGPS = async () => {
         try {
-            console.log({
-                message: "Flashing firmware",
-            });
             await fetchEventSource(`/api/setup/flashGPS`, {
                 method: "POST",
                 keepalive: false,
                 headers: {
                     Accept: "text/event-stream",
                 },
-                onopen(res) {
+                onopen(res: Response) {
                     if (res.ok && res.status === 200) {
-                        console.log({
-                            message: "Connected to log stream",
-                        });
+                        console.log("Connected to GPS flash log stream");
                     } else if (
                         res.status >= 400 &&
                         res.status < 500 &&
@@ -42,10 +37,11 @@ export const FlashGPSComponent = (props: { onNext: () => void, onPrevious: () =>
                     setData([])
                     return Promise.resolve()
                 },
-                onmessage(event) {
+                onmessage(event: {event: string; data: string}) {
                     if (event.event == "end") {
                         notification.success({
-                            message: "GPS flashed",
+                            message: "GPS configuration flashed",
+                            description: "The GPS hardware has been configured to match the protocol selected in Settings.",
                         });
                         setTimeout(() => {
                             props.onNext();
@@ -53,40 +49,47 @@ export const FlashGPSComponent = (props: { onNext: () => void, onPrevious: () =>
                         return;
                     } else if (event.event == "error") {
                         notification.error({
-                            message: "Error flashing gps",
+                            message: "Error flashing GPS",
                             description: event.data,
                         });
                         return;
                     } else {
-                        setData((data) => [...(data ?? []), event.data]);
+                        setData((prev: string[] | undefined) => [...(prev ?? []), event.data]);
                     }
                 },
                 onclose() {
                     notification.success({
-                        message: "Logs stream closed",
+                        message: "Log stream closed",
                     });
                 },
-                onerror(err) {
+                onerror(err: unknown) {
                     notification.error({
                         message: "Error retrieving log stream",
-                        description: err.toString(),
+                        description: String(err),
                     });
                 },
             });
-        } catch (e: any) {
+        } catch (e: unknown) {
             notification.error({
-                message: "Error flashing gps",
-                description: e.toString(),
+                message: "Error flashing GPS",
+                description: String(e),
             });
         }
     };
     return <Row>
         <Col span={24} style={{textAlign: "center"}}>
             <Typography.Title level={4}>
-                Click on the button below to flash your uBlox Z-F9P GPS Configuration.
+                Flash uBlox GPS Configuration
             </Typography.Title>
+            <Typography.Paragraph>
+                Click the button below to upload the GPS configuration file and set the output protocol to
+                match <Typography.Text code>OM_GPS_PROTOCOL</Typography.Text> from your Settings.
+            </Typography.Paragraph>
+            <Typography.Paragraph type="secondary">
+                Make sure you have selected the correct GPS protocol in the Settings step before continuing.
+            </Typography.Paragraph>
             <Modal
-                title="GPS logs"
+                title="GPS configuration log"
                 width={"70%"}
                 open={(data && data.length > 0)}
                 cancelButtonProps={{style: {display: "none"}}}
@@ -96,7 +99,7 @@ export const FlashGPSComponent = (props: { onNext: () => void, onPrevious: () =>
             >
                 <StyledTerminal>
                     <Terminal colorMode={ColorMode.Dark}>
-                        {(data ?? []).map((line, index) => {
+                        {(data ?? []).map((line: string, index: number) => {
                             return <TerminalOutput key={index}>{line}</TerminalOutput>;
                         })}
                     </Terminal>
@@ -118,5 +121,6 @@ export const FlashGPSComponent = (props: { onNext: () => void, onPrevious: () =>
                 <AsyncButton type={"primary"} onAsyncClick={flashGPS}>Flash GPS Configuration</AsyncButton>
                 <Button onClick={props.onNext}>Skip</Button>
             </FormButtonGroup>
-        </Col> </Row>;
+        </Col>
+    </Row>;
 };

@@ -1,9 +1,12 @@
 import React, { CSSProperties, useCallback, useEffect, useState } from "react";
-import { Card, Col, Row, Spin, Switch, Input, InputNumber, Select, Form, Button, Space, Typography } from "antd";
-import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { App, Card, Col, Modal, Row, Spin, Switch, Input, InputNumber, Select, Form, Button, Space, Typography } from "antd";
+import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined, ToolOutlined } from "@ant-design/icons";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import Terminal, { ColorMode, TerminalOutput } from "react-terminal-ui";
 import { JSONSchemaProperty, JSONSchemaCondition, useSettingsSchema } from "../hooks/useSettingsSchema.ts";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useThemeMode } from "../theme/ThemeContext.tsx";
+import { StyledTerminal } from "./StyledTerminal.tsx";
 
 type FieldRenderProps = {
     name: string;
@@ -154,6 +157,92 @@ const KeyValueEditor: React.FC<KeyValueEditorProps> = ({ title, description, ent
     );
 };
 
+// ---------------------------------------------------------------------------
+// GPS hardware configuration button
+// ---------------------------------------------------------------------------
+
+/** Streams POST /api/setup/configureGPS and shows progress in a modal terminal. */
+const ConfigureGPSHardwareButton: React.FC = () => {
+    const { notification } = App.useApp();
+    const [logs, setLogs] = useState<string[] | null>(null);
+    const [running, setRunning] = useState(false);
+
+    const handleConfigure = async () => {
+        setLogs([]);
+        setRunning(true);
+        try {
+            await fetchEventSource("/api/setup/configureGPS", {
+                method: "POST",
+                keepalive: false,
+                headers: { Accept: "text/event-stream" },
+                onopen(res: Response) {
+                    if (!res.ok || res.status !== 200) {
+                        notification.error({ message: "GPS configure: connection failed", description: res.statusText });
+                    }
+                    return Promise.resolve();
+                },
+                onmessage(event: { event: string; data: string }) {
+                    if (event.event === "end") {
+                        notification.success({ message: "GPS hardware protocol configured" });
+                        setRunning(false);
+                        return;
+                    }
+                    if (event.event === "error") {
+                        notification.error({ message: "GPS configure failed", description: event.data });
+                        setRunning(false);
+                        return;
+                    }
+                    setLogs((prev: string[] | null) => [...(prev ?? []), event.data]);
+                },
+                onclose() { setRunning(false); },
+                onerror(err: unknown) {
+                    notification.error({ message: "GPS configure stream error", description: String(err) });
+                    setRunning(false);
+                },
+            });
+        } catch (e: unknown) {
+            notification.error({ message: "GPS configure failed", description: String(e) });
+            setRunning(false);
+        }
+    };
+
+    return (
+        <>
+            <Form.Item
+                label="Apply protocol to GPS hardware"
+                tooltip="Sends UBX-CFG-VALSET commands to the GPS module to switch it between UBX binary and NMEA output, matching the OM_GPS_PROTOCOL setting saved above."
+            >
+                <Button
+                    icon={<ToolOutlined />}
+                    loading={running}
+                    onClick={handleConfigure}
+                >
+                    Configure GPS Hardware
+                </Button>
+            </Form.Item>
+            <Modal
+                title="GPS hardware configuration"
+                width="70%"
+                open={logs !== null}
+                cancelButtonProps={{ style: { display: "none" } }}
+                onOk={() => setLogs(null)}
+                okButtonProps={{ disabled: running }}
+            >
+                <StyledTerminal>
+                    <Terminal colorMode={ColorMode.Dark}>
+                        {(logs ?? []).map((line: string, index: number) => (
+                            <TerminalOutput key={index}>{line}</TerminalOutput>
+                        ))}
+                        {running && <TerminalOutput>…</TerminalOutput>}
+                    </Terminal>
+                </StyledTerminal>
+            </Modal>
+        </>
+    );
+};
+
+// ---------------------------------------------------------------------------
+
 const resolveConditionalProperties = (
     allOf: JSONSchemaCondition[] | undefined,
     values: Record<string, any>,
@@ -266,6 +355,8 @@ const SchemaSection: React.FC<SectionProps> = ({ sectionKey, section, values, on
                         />
                     );
                 })}
+                {/* GPS section: show a button to push the saved protocol to hardware */}
+                {sectionKey === "gps_settings" && <ConfigureGPSHardwareButton />}
             </Form>
         </Card>
     );

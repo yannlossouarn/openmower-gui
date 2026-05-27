@@ -49,3 +49,4 @@ web/screenshots/mobile-settings.png
 web/screenshots/mobile-setup-fixed.png
 web/src/routes/root.test.tsx
 web/src/routes/root.tsx
+.venv

@@ -16,7 +16,7 @@ RUN apt-get install -y rpi.gpio-common  || true
 RUN git clone --recursive --branch rpi-common --depth=1 https://github.com/raspberrypi/openocd.git   
 RUN cd openocd && ./bootstrap with-submodules && ./configure --enable-ftdi --enable-sysfsgpio --enable-bcm2835gpio && make -j$(nproc) && make install && cd .. && rm -rf openocd
 RUN curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py &&    python3 get-platformio.py
-RUN python3 -m pip install --upgrade pygnssutils 
+RUN python3 -m pip install --upgrade pygnssutils pyserial
 RUN mkdir -p /usr/local/bin &&    ln -s ~/.platformio/penv/bin/platformio /usr/local/bin/platformio &&    ln -s ~/.platformio/penv/bin/pio /usr/local/bin/pio &&    ln -s ~/.platformio/penv/bin/piodebuggdb /usr/local/bin/piodebuggdb
 
 FROM deps

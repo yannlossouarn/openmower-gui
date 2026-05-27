@@ -711,5 +711,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
                 type: ContentType.Json,
                 ...params,
             }),
+
+        /**
+         * @description configure GPS hardware output protocol to match OM_GPS_PROTOCOL setting
+         *
+         * @tags setup
+         * @name ConfigureGpsCreate
+         * @summary configure GPS hardware output protocol
+         * @request POST:/setup/configureGPS
+         */
+        configureGpsCreate: (params: RequestParams = {}) =>
+            this.request<ApiOkResponse, ApiErrorResponse>({
+                path: `/setup/configureGPS`,
+                method: "POST",
+                type: ContentType.Json,
+                ...params,
+            }),
   };
 }
