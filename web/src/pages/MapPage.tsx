@@ -354,7 +354,7 @@ export const MapPage: React.FC<{compact?: boolean}> = ({compact = false}) => {
     });
 
 
-    const {manualMode, handleManualMode, handleStopManualMode, handleJoyMove, handleJoyStop} = useManualMode({mowerAction, joyStream});
+    const {manualMode, bladeOn, handleManualMode, handleStopManualMode, toggleBlade, handleJoyMove, handleJoyStop} = useManualMode({mowerAction, joyStream});
 
     // Mower action callbacks shared between desktop and mobile toolbars
     const mowerActions = useMemo(() => ({
@@ -554,6 +554,8 @@ export const MapPage: React.FC<{compact?: boolean}> = ({compact = false}) => {
                     onStop={handleJoyStop}
                     onFinishRecording={mowerAction("high_level_control", {Command: 2})}
                     onHome={mowerAction("high_level_control", {Command: 2})}
+                    bladeOn={bladeOn}
+                    onToggleBlade={toggleBlade}
                 />
                 {isMobile && (
                     <MapToolbarMobile

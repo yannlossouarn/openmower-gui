@@ -4,6 +4,14 @@ import type {IJoystickUpdateEvent} from "react-joystick-component/build/lib/Joys
 
 const JOY_SEND_INTERVAL_MS = 100;
 
+// Behavior actions handled by AreaRecordingBehavior in mower_logic, published to
+// the xbot/action topic. Toggling the blade during manual mowing must go through
+// these: the mower_logic safety loop continuously forces the blade to match the
+// behavior's manual_mowing flag, so a direct mow_enabled service call is undone
+// within ~0.5s. These actions flip that flag, which the safety loop honors.
+const START_MANUAL_MOWING = "mower_logic:area_recording/start_manual_mowing";
+const STOP_MANUAL_MOWING = "mower_logic:area_recording/stop_manual_mowing";
+
 interface UseManualModeOptions {
     mowerAction: (action: string, params: Record<string, unknown>) => () => Promise<void>;
     joyStream: { sendJsonMessage: (msg: unknown) => void; start: (uri: string) => void };
@@ -11,6 +19,7 @@ interface UseManualModeOptions {
 
 export function useManualMode({mowerAction, joyStream}: UseManualModeOptions) {
     const [manualMode, setManualMode] = useState<number | undefined>();
+    const [bladeOn, setBladeOn] = useState(false);
     const lastTwistRef = useRef<Twist | null>(null);
     const joyIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -33,23 +42,27 @@ export function useManualMode({mowerAction, joyStream}: UseManualModeOptions) {
         // Don't wait for the AREA_RECORDING state to propagate back via highLevelStatus.
         joyStream.start("/api/openmower/publish/joy");
         await mowerAction("high_level_control", {Command: 3})();
-        // Enable mowing blade immediately, then keep it alive every 10s
-        await mowerAction("mow_enabled", {MowEnabled: 1, MowDirection: 0})();
-        setManualMode(setInterval(() => {
-            (async () => {
-                await mowerAction("mow_enabled", {MowEnabled: 1, MowDirection: 0})();
-            })();
-        }, 10000));
+        // Blade stays off until the user explicitly toggles it on (safer entry).
+        setBladeOn(false);
+        setManualMode(1);
     };
 
     const handleStopManualMode = async () => {
-        await mowerAction("high_level_control", {Command: 2})();
-        clearInterval(manualMode);
+        // Command the blade off via the behavior while AREA_RECORDING is still active,
+        // then transition home.
+        await mowerAction("action", {Data: STOP_MANUAL_MOWING})();
+        setBladeOn(false);
         setManualMode(undefined);
         stopJoyInterval();
         lastTwistRef.current = null;
-        await mowerAction("mow_enabled", {MowEnabled: 0, MowDirection: 0})();
+        await mowerAction("high_level_control", {Command: 2})();
     };
+
+    const toggleBlade = useCallback(async () => {
+        const next = !bladeOn;
+        await mowerAction("action", {Data: next ? START_MANUAL_MOWING : STOP_MANUAL_MOWING})();
+        setBladeOn(next);
+    }, [bladeOn, mowerAction]);
 
     const handleJoyMove = useCallback((event: IJoystickUpdateEvent) => {
         const msg: Twist = {
@@ -74,5 +87,5 @@ export function useManualMode({mowerAction, joyStream}: UseManualModeOptions) {
         joyStream.sendJsonMessage(msg);
     }, [joyStream, stopJoyInterval]);
 
-    return {manualMode, handleManualMode, handleStopManualMode, handleJoyMove, handleJoyStop};
+    return {manualMode, bladeOn, handleManualMode, handleStopManualMode, toggleBlade, handleJoyMove, handleJoyStop};
 }

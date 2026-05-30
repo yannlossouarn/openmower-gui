@@ -32,18 +32,20 @@ describe('useManualMode', () => {
         expect(result.current.manualMode).toBeUndefined();
     });
 
-    it('handleManualMode activates manual mode', async () => {
+    it('handleManualMode activates manual mode with blade off', async () => {
         const {result} = renderManualMode();
         await act(async () => {
             await result.current.handleManualMode();
         });
         expect(startStream).toHaveBeenCalledWith('/api/openmower/publish/joy');
         expect(mowerAction).toHaveBeenCalledWith('high_level_control', {Command: 3});
-        expect(mowerAction).toHaveBeenCalledWith('mow_enabled', {MowEnabled: 1, MowDirection: 0});
+        // Blade must NOT be commanded on at entry.
+        expect(mowerAction).not.toHaveBeenCalledWith('action', {Data: 'mower_logic:area_recording/start_manual_mowing'});
         expect(result.current.manualMode).toBeDefined();
+        expect(result.current.bladeOn).toBe(false);
     });
 
-    it('handleStopManualMode deactivates manual mode', async () => {
+    it('handleStopManualMode deactivates manual mode and stops the blade', async () => {
         const {result} = renderManualMode();
         await act(async () => {
             await result.current.handleManualMode();
@@ -53,9 +55,26 @@ describe('useManualMode', () => {
         await act(async () => {
             await result.current.handleStopManualMode();
         });
+        expect(mowerAction).toHaveBeenCalledWith('action', {Data: 'mower_logic:area_recording/stop_manual_mowing'});
         expect(mowerAction).toHaveBeenCalledWith('high_level_control', {Command: 2});
-        expect(mowerAction).toHaveBeenCalledWith('mow_enabled', {MowEnabled: 0, MowDirection: 0});
         expect(result.current.manualMode).toBeUndefined();
+        expect(result.current.bladeOn).toBe(false);
+    });
+
+    it('toggleBlade turns the blade on then off via xbot/action', async () => {
+        const {result} = renderManualMode();
+
+        await act(async () => {
+            await result.current.toggleBlade();
+        });
+        expect(mowerAction).toHaveBeenCalledWith('action', {Data: 'mower_logic:area_recording/start_manual_mowing'});
+        expect(result.current.bladeOn).toBe(true);
+
+        await act(async () => {
+            await result.current.toggleBlade();
+        });
+        expect(mowerAction).toHaveBeenCalledWith('action', {Data: 'mower_logic:area_recording/stop_manual_mowing'});
+        expect(result.current.bladeOn).toBe(false);
     });
 
     it('handleJoyMove sends twist message', () => {
