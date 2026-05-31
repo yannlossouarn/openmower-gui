@@ -411,6 +411,29 @@ func TestAddImuYawDeadband_NoGpsSection(t *testing.T) {
 	assert.NotContains(t, props, "gps_settings")
 }
 
+func TestAddMowRpmThreshold(t *testing.T) {
+	props := map[string]any{
+		"mower_logic_settings": map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+		},
+	}
+	addMowRpmThreshold(props)
+	mp := props["mower_logic_settings"].(map[string]any)["properties"].(map[string]any)
+	require.Contains(t, mp, "OM_MOW_RPM_THRESHOLD")
+	field := mp["OM_MOW_RPM_THRESHOLD"].(map[string]any)
+	assert.Equal(t, "number", field["type"])
+	assert.Equal(t, 2800, field["default"])
+	assert.Equal(t, "OM_MOW_RPM_THRESHOLD", field["x-environment-variable"])
+}
+
+func TestAddMowRpmThreshold_NoSection(t *testing.T) {
+	props := map[string]any{}
+	// Must not panic when the mower-logic section is absent.
+	addMowRpmThreshold(props)
+	assert.NotContains(t, props, "mower_logic_settings")
+}
+
 func TestGetSettingsYAML_Success(t *testing.T) {
 	yamlFile := createTempYAMLFile(t, "OM_DATUM_LAT: 48.123\nOM_USE_NTRIP: true\n")
 

@@ -599,6 +599,9 @@ func applyMowgliOverlay(schema map[string]any) map[string]any {
 	// which is Mowgli-specific)
 	promoteAdvancedSection(props, "mower_logic_settings", nil)
 
+	// Let the user tune the FTCPlanner rotor-load throttle threshold.
+	addMowRpmThreshold(props)
+
 	return schema
 }
 
@@ -643,6 +646,30 @@ func addImuYawDeadband(props map[string]any) {
 		"title":                  "IMU Yaw Deadband (rad/s)",
 		"description":            "Zero out IMU yaw rates below this magnitude (rad/s) so gyro bias doesn't drift the heading while the robot is stationary. 0 disables.",
 		"x-environment-variable": "OM_IMU_YAW_DEADBAND",
+	}
+}
+
+// addMowRpmThreshold injects the Mowgli-specific OM_MOW_RPM_THRESHOLD tuning field into the
+// mower-logic section. It feeds FTCPlanner's rotor-load throttle: below this rotor RPM the
+// robot throttles forward speed while mowing, and it waits for the rotor to reach this RPM
+// before moving forward. No effect on transit/navigation paths.
+func addMowRpmThreshold(props map[string]any) {
+	section, ok := props["mower_logic_settings"].(map[string]any)
+	if !ok {
+		return
+	}
+	sectionProps, ok := section["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	sectionProps["OM_MOW_RPM_THRESHOLD"] = map[string]any{
+		"type":                   "number",
+		"default":                2800,
+		"minimum":                0,
+		"maximum":                8000,
+		"title":                  "Min mowing rotor RPM (throttle / spin-up)",
+		"description":            "While mowing, throttle forward speed when the rotor RPM drops below this, and wait for the rotor to reach it before moving forward. No effect on transit paths.",
+		"x-environment-variable": "OM_MOW_RPM_THRESHOLD",
 	}
 }
 
