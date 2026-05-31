@@ -386,6 +386,31 @@ func TestApplyMowgliOverlay_AlreadyHasMowgli(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
+func TestAddImuYawDeadband(t *testing.T) {
+	props := map[string]any{
+		"gps_settings": map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+		},
+	}
+
+	addImuYawDeadband(props)
+
+	gps := props["gps_settings"].(map[string]any)["properties"].(map[string]any)
+	require.Contains(t, gps, "OM_IMU_YAW_DEADBAND")
+	field := gps["OM_IMU_YAW_DEADBAND"].(map[string]any)
+	assert.Equal(t, "number", field["type"])
+	assert.Equal(t, 0.03, field["default"])
+	assert.Equal(t, "OM_IMU_YAW_DEADBAND", field["x-environment-variable"])
+}
+
+func TestAddImuYawDeadband_NoGpsSection(t *testing.T) {
+	props := map[string]any{}
+	// Must not panic when the GPS section is absent.
+	addImuYawDeadband(props)
+	assert.NotContains(t, props, "gps_settings")
+}
+
 func TestGetSettingsYAML_Success(t *testing.T) {
 	yamlFile := createTempYAMLFile(t, "OM_DATUM_LAT: 48.123\nOM_USE_NTRIP: true\n")
 

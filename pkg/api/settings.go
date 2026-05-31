@@ -592,6 +592,9 @@ func applyMowgliOverlay(schema map[string]any) map[string]any {
 	// and set Mowgli-specific defaults (GPS on /dev/gps, UBX protocol)
 	applyMowgliGPSOverlay(props)
 
+	// Let the user tune the IMU yaw deadband (suppresses standstill EKF heading drift).
+	addImuYawDeadband(props)
+
 	// Promote mower logic advanced settings (includes OM_PERIMETER_SIGNAL
 	// which is Mowgli-specific)
 	promoteAdvancedSection(props, "mower_logic_settings", nil)
@@ -617,6 +620,30 @@ func applyMowgliGPSOverlay(props map[string]any) {
 		},
 	}
 	promoteAdvancedSection(props, "gps_settings", overrides)
+}
+
+// addImuYawDeadband injects the Mowgli-specific OM_IMU_YAW_DEADBAND tuning field
+// into the GPS/positioning section. It suppresses standstill EKF heading drift:
+// the single-antenna GPS provides no heading at rest, so the EKF heading free-runs
+// on gyro bias unless small yaw rates are zeroed.
+func addImuYawDeadband(props map[string]any) {
+	section, ok := props["gps_settings"].(map[string]any)
+	if !ok {
+		return
+	}
+	sectionProps, ok := section["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	sectionProps["OM_IMU_YAW_DEADBAND"] = map[string]any{
+		"type":                   "number",
+		"default":                0.03,
+		"minimum":                0,
+		"maximum":                1,
+		"title":                  "IMU Yaw Deadband (rad/s)",
+		"description":            "Zero out IMU yaw rates below this magnitude (rad/s) so gyro bias doesn't drift the heading while the robot is stationary. 0 disables.",
+		"x-environment-variable": "OM_IMU_YAW_DEADBAND",
+	}
 }
 
 // promoteAdvancedSection removes the "advanced" boolean toggle from a schema
