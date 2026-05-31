@@ -552,8 +552,8 @@ export const MapPage: React.FC<{compact?: boolean}> = ({compact = false}) => {
                     isRecording={highLevelStatus.highLevelStatus.StateName === "AREA_RECORDING"}
                     onMove={handleJoyMove}
                     onStop={handleJoyStop}
-                    onFinishRecording={mowerAction("high_level_control", {Command: 2})}
-                    onHome={mowerAction("high_level_control", {Command: 2})}
+                    onFinishRecording={manualMode != null ? handleStopManualMode : mowerAction("high_level_control", {Command: 2})}
+                    onHome={manualMode != null ? handleStopManualMode : mowerAction("high_level_control", {Command: 2})}
                     bladeOn={bladeOn}
                     onToggleBlade={toggleBlade}
                 />
