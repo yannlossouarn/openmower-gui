@@ -1,4 +1,4 @@
-import {useCallback, useRef, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import type {Twist} from "../../../types/ros.ts";
 import type {IJoystickUpdateEvent} from "react-joystick-component/build/lib/Joystick";
 
@@ -15,13 +15,24 @@ const STOP_MANUAL_MOWING = "mower_logic:area_recording/stop_manual_mowing";
 interface UseManualModeOptions {
     mowerAction: (action: string, params: Record<string, unknown>) => () => Promise<void>;
     joyStream: { sendJsonMessage: (msg: unknown) => void; start: (uri: string) => void };
+    // Live blade state from /ll/mower_status.mow_enabled (the source of truth).
+    mowEnabled?: boolean;
 }
 
-export function useManualMode({mowerAction, joyStream}: UseManualModeOptions) {
+export function useManualMode({mowerAction, joyStream, mowEnabled}: UseManualModeOptions) {
     const [manualMode, setManualMode] = useState<number | undefined>();
     const [bladeOn, setBladeOn] = useState(false);
     const lastTwistRef = useRef<Twist | null>(null);
     const joyIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+    // Reconcile the displayed blade state with the real mow_enabled so it survives
+    // navigating away and back (MapPage remount) and any external blade change. Fires
+    // only when the real value changes, so optimistic toggles don't flicker.
+    useEffect(() => {
+        if (mowEnabled !== undefined) {
+            setBladeOn(mowEnabled);
+        }
+    }, [mowEnabled]);
 
     const startJoyInterval = useCallback(() => {
         clearInterval(joyIntervalRef.current);
