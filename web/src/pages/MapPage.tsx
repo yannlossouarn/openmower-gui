@@ -32,6 +32,7 @@ import {MapToolbarMobile} from "./map/components/MapToolbarMobile.tsx";
 import {MapEditorToolbar} from "./map/components/MapEditorToolbar.tsx";
 import {JoystickOverlay} from "./map/components/JoystickOverlay.tsx";
 import {useIsMobile} from "../hooks/useIsMobile.ts";
+import {useStatus} from "../hooks/useStatus.ts";
 import {useThemeMode} from "../theme/ThemeContext.tsx";
 
 
@@ -354,7 +355,8 @@ export const MapPage: React.FC<{compact?: boolean}> = ({compact = false}) => {
     });
 
 
-    const {manualMode, bladeOn, handleManualMode, handleStopManualMode, toggleBlade, handleJoyMove, handleJoyStop} = useManualMode({mowerAction, joyStream});
+    const mowerStatus = useStatus();
+    const {manualMode, bladeOn, handleManualMode, handleStopManualMode, toggleBlade, handleJoyMove, handleJoyStop} = useManualMode({mowerAction, joyStream, mowEnabled: mowerStatus.MowEnabled});
 
     // Mower action callbacks shared between desktop and mobile toolbars
     const mowerActions = useMemo(() => ({
